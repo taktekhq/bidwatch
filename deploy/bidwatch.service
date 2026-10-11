@@ -1,0 +1,18 @@
+# systemd user service for one bidwatch run. Install into
+# ~/.config/systemd/user/bidwatch.service and edit the two paths below
+# for your machine, then enable bidwatch.timer alongside it.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/bidwatch.service deploy/bidwatch.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now bidwatch.timer
+#
+# Check a run with: journalctl --user -u bidwatch.service -n 100
+
+[Unit]
+Description=bidwatch: check contract/RFP boards for new matches
+
+[Service]
+Type=oneshot
+# Path to the bidwatch binary, built with: go build -o bidwatch ./cmd/bidwatch
+ExecStart=/home/%u/bidwatch/bidwatch -data /home/%u/bidwatch-data

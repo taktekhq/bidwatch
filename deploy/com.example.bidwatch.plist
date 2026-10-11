@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd job: runs bidwatch once a week. Copy this file to
+  ~/Library/LaunchAgents/com.example.bidwatch.plist (renaming it to
+  something that identifies you, e.g. com.yourname.bidwatch), edit the
+  three paths below, then:
+
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.bidwatch.plist
+    launchctl kickstart gui/$(id -u)/com.example.bidwatch   # run it once now, to check
+
+  bin/withlock is Taktek's small portable flock/timeout wrapper
+  (github.com/taktekhq is where it lives); any other lock-and-timeout
+  wrapper, or none at all, works too, since bidwatch's own run is a few
+  HTTP requests and never hangs on a lock of its own.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.example.bidwatch</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/path/to/bin/withlock</string>
+		<string>--timeout</string>
+		<string>300</string>
+		<string>/tmp/bidwatch.lock</string>
+		<string>0</string>
+		<string>/path/to/bidwatch</string>
+		<string>-data</string>
+		<string>/path/to/your/bidwatch-data</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Weekday</key>
+		<integer>1</integer>
+		<key>Hour</key>
+		<integer>8</integer>
+		<key>Minute</key>
+		<integer>47</integer>
+	</dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/path/to/your/bidwatch-data/launchd.log</string>
+	<key>StandardErrorPath</key>
+	<string>/path/to/your/bidwatch-data/launchd.log</string>
+</dict>
+</plist>

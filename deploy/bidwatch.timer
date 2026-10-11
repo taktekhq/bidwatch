@@ -1,0 +1,12 @@
+# Fires bidwatch.service once a week, Monday morning. See
+# bidwatch.service for install steps.
+
+[Unit]
+Description=bidwatch weekly run
+
+[Timer]
+OnCalendar=Mon *-*-* 08:47:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

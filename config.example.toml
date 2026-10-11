@@ -1,0 +1,53 @@
+# bidwatch config. Copy this file to your data folder as config.toml and
+# edit it there. Nothing in this file is secret; the Slack token is
+# resolved at runtime from SLACK_BOT_TOKEN or slack.token_command below,
+# never written here.
+
+# Honest User-Agent sent with every request. Name the bot; this is not a
+# browser fingerprint.
+user_agent = "bidwatch/1.0 (+https://github.com/taktekhq/bidwatch)"
+
+# Seconds to pause between fetching each source, to be polite.
+delay_between_sources_seconds = 3
+
+# HTTP timeout per request, seconds.
+request_timeout_seconds = 30
+
+[slack]
+# The channel bidwatch posts its one weekly message to, by ID (starts
+# with "C") rather than name; a bot token can't look up a name reliably.
+channel = "C0000000000"
+# Resolves the bot token at runtime. Overridden by the SLACK_BOT_TOKEN
+# environment variable when set. Set this to a command whose stdout is
+# the token, for example your password manager's CLI; bidwatch runs it
+# itself and never prints or logs what it returns.
+token_command = ""
+
+[match]
+# A listing needs at least one of these, in its title (case-insensitive).
+keywords = [
+  "website", "web", "app", "software", "digital", "platform", "ai",
+  "automation", "data", "crm", "salesforce", "seo", "social media",
+  "marketing", "translation", "arabic", "e-commerce", "shopify",
+]
+# ...and none of these, or it's dropped regardless of a keyword hit.
+excludes = [
+  "construction", "catering", "vehicle", "fuel", "hvac", "plumbing",
+  "demolition", "mold remediation", "well drilling", "fencing",
+  "security guard", "janitorial",
+]
+
+[sources]
+# Each source is a small adapter; see README.md for what each one reads
+# and which are known to be blocked right now. Turning a blocked one back
+# on costs nothing: it will just report blocked again until the block
+# lifts.
+daleel_madani       = true
+nten_jobs           = true
+asae_solutions_hub  = true
+rfpdb               = true
+ungm                = true
+afdb                = true
+save_the_children   = true
+prosper_global      = true
+sba_subnet          = true

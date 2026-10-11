@@ -1,0 +1,6 @@
+/bidwatch
+*.log
+
+# A real data folder (config.toml, state.json, runs.log) is never kept
+# inside the repo checkout; it lives wherever --data or BIDWATCH_DATA
+# points, outside this tree.
