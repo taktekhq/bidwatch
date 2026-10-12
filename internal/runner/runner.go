@@ -25,6 +25,7 @@ import (
 type SourceCount struct {
 	Name    string
 	Fetched int
+	Ignored int // dropped by [ignore].substrings before matching; not counted in Matched/New
 	Matched int
 	New     int
 	Credits int    // metered API credits this source spent (e.g. Firecrawl); 0 for every plain-HTTP source
@@ -80,6 +81,10 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 
 		sc.Fetched = len(listings)
 		for _, l := range listings {
+			if isIgnored(l, cfg.Ignore.Substrings) {
+				sc.Ignored++
+				continue
+			}
 			if l.Kind == model.KindLead {
 				// A lead's own adapter already applied its source-specific
 				// filter (an amount band and NAICS codes, or a Drupal 7
@@ -139,6 +144,27 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 	}
 }
 
+// isIgnored reports whether l's title or URL contains any of substrings,
+// case-insensitively: a standing "no" from Nizar, regardless of which
+// source lists it or under what URL.
+func isIgnored(l model.Listing, substrings []string) bool {
+	if len(substrings) == 0 {
+		return false
+	}
+	title := strings.ToLower(l.Title)
+	url := strings.ToLower(l.URL)
+	for _, s := range substrings {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		if strings.Contains(title, s) || strings.Contains(url, s) {
+			return true
+		}
+	}
+	return false
+}
+
 func formatMessage(newRFPs []model.Listing, postedLeads []model.Listing, totalNewLeads int, counts []SourceCount) string {
 	var b strings.Builder
 	if len(newRFPs) == 0 {
@@ -181,6 +207,9 @@ func formatMessage(newRFPs []model.Listing, postedLeads []model.Listing, totalNe
 			parts = append(parts, fmt.Sprintf("%s error (%s)", c.Name, c.Err))
 		default:
 			part := fmt.Sprintf("%s %d fetched, %d matched, %d new", c.Name, c.Fetched, c.Matched, c.New)
+			if c.Ignored > 0 {
+				part += fmt.Sprintf(", %d ignored", c.Ignored)
+			}
 			if c.Credits > 0 {
 				part += fmt.Sprintf(", %d credit(s)", c.Credits)
 			}

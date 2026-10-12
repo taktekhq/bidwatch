@@ -37,11 +37,23 @@ type Config struct {
 	// USAspending has no key (the API is public); these are the filters
 	// applied to its one query.
 	USAspending struct {
-		WindowDays int      `toml:"window_days"`
-		MinAmount  float64  `toml:"min_amount"`
-		MaxAmount  float64  `toml:"max_amount"`
-		NAICSCodes []string `toml:"naics_codes"`
+		WindowDays          int      `toml:"window_days"`
+		MinAmount           float64  `toml:"min_amount"`
+		MaxAmount           float64  `toml:"max_amount"`
+		NAICSCodes          []string `toml:"naics_codes"`
+		IncludeWords        []string `toml:"include_words"`
+		ExcludeWords        []string `toml:"exclude_words"`
+		PreferSmallBusiness bool     `toml:"prefer_small_business"`
 	} `toml:"usaspending"`
+
+	// Ignore holds substrings matched, case-insensitively, against a
+	// listing's title or URL, for anything Nizar already decided
+	// against: it never posts again even if a source lists it under a
+	// new URL (an RFP repost) or it would otherwise pass every filter
+	// (a lead). Applies to every source, not just one.
+	Ignore struct {
+		Substrings []string `toml:"substrings"`
+	} `toml:"ignore"`
 
 	// EOLTech resolves the PublicWWW API key eol_tech_drupal7 uses.
 	// PublicWWW's API needs a key issued on a paid plan; empty disables
@@ -105,6 +117,22 @@ func (c *Config) applyDefaults() {
 	}
 	if len(c.USAspending.NAICSCodes) == 0 {
 		c.USAspending.NAICSCodes = []string{"541511", "541512", "541519", "518210"}
+	}
+	if len(c.USAspending.IncludeWords) == 0 {
+		c.USAspending.IncludeWords = []string{
+			"develop", "development", "design", "website", "web", "portal",
+			"application", "app", "platform", "modernization", "modernisation",
+			"migration", "integration", "dashboard", "ux", "accessibility",
+			"508", "data pipeline", "automation",
+		}
+	}
+	if len(c.USAspending.ExcludeWords) == 0 {
+		c.USAspending.ExcludeWords = []string{
+			"license", "licenses", "licence", "licences", "renewal",
+			"renewals", "subscription", "subscriptions", "maintenance",
+			"support", "hardware", "equipment", "radio", "medical", "lab",
+			"seats", "seat",
+		}
 	}
 	if c.EOLTech.PerPage <= 0 {
 		c.EOLTech.PerPage = 25

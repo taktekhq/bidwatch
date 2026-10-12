@@ -121,10 +121,13 @@ func enabledSources(cfg *config.Config, firecrawlKey, publicwwwKey string) []sou
 	add(cfg.Sources.ProsperGlobal, prosperglobal.Name, prosperglobal.Fetch)
 	add(cfg.Sources.SBASubNet, sbasubnet.Name, sbasubnet.Fetch)
 	add(cfg.Sources.USAspendingAwards, usaspending.Name, usaspending.New(usaspending.Config{
-		WindowDays: cfg.USAspending.WindowDays,
-		MinAmount:  cfg.USAspending.MinAmount,
-		MaxAmount:  cfg.USAspending.MaxAmount,
-		NAICSCodes: cfg.USAspending.NAICSCodes,
+		WindowDays:          cfg.USAspending.WindowDays,
+		MinAmount:           cfg.USAspending.MinAmount,
+		MaxAmount:           cfg.USAspending.MaxAmount,
+		NAICSCodes:          cfg.USAspending.NAICSCodes,
+		IncludeWords:        cfg.USAspending.IncludeWords,
+		ExcludeWords:        cfg.USAspending.ExcludeWords,
+		PreferSmallBusiness: cfg.USAspending.PreferSmallBusiness,
 	}))
 	// eol_tech_drupal7 needs a PublicWWW key issued on a paid plan; no
 	// key means this source is left out of the run the same way

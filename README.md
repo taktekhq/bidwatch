@@ -70,6 +70,22 @@ domain still posts at most once, ever, the same as every other listing.
   (default $25,000 to $500,000). The recipient is the lead: a company to
   approach as a subcontractor, not a buyer to bid against; by the time an
   award shows up here, there's nothing left to bid on.
+
+  The query asks for `date_type: "new_awards_only"`, USAspending's own
+  documented way to exclude a *modification* to an older award (one
+  whose action date just moved, not a new award), and sorts newest
+  first. A description still has to contain a whole word from
+  `usaspending.include_words` (develop, website, platform, dashboard,
+  508... the default list reads like build work) and none from
+  `usaspending.exclude_words` (license, renewal, subscription,
+  maintenance, support, hardware, radio, medical, lab... the default
+  list reads like a purchase, not a project). At most one lead posts
+  per recipient per run (the newest of that recipient's qualifying
+  awards). When `usaspending.prefer_small_business` is on (default
+  true), a recipient whose business categories (read from the award's
+  own detail page; `spending_by_award` doesn't carry them) mention
+  "small" sorts ahead of the rest, rather than dropping anyone: a
+  lookup that fails just skips the boost for that one candidate.
 - **End-of-life tech (Drupal 7)**: Drupal stopped shipping security
   patches for Drupal 7 in January 2025, so a live Drupal 7 site is a
   lead worth a free, no-strings note. Found through
@@ -82,6 +98,17 @@ domain still posts at most once, ever, the same as every other listing.
   (`sources.eol_tech_drupal7 = false`). Set
   `eol_tech.publicwww_api_key_command` (or `PUBLICWWW_API_KEY`) and turn
   the source on if you have a PublicWWW plan.
+
+### The ignore list
+
+`[ignore]` `substrings` is a flat list of case-insensitive substrings
+matched against every listing's title and URL, from every source, RFP
+or lead. It's for a standing "no": something already decided against
+(the config comments are the place to say why), so it never posts
+again even if a source lists it under a new URL. It's checked before
+matching, so an ignored listing never reaches `[match]` or a lead's own
+filter, and the per-source count line shows how many got dropped this
+way (`"N ignored"`) so the rule's effect stays visible.
 
 ## Install
 
@@ -157,11 +184,13 @@ bidwatch: 2 new match(es) today
 - RFP #: P-2027-2 SS4A Safety Action Plan, buyer not stated, deadline 4 Nov 2026, https://www.rfpdb.com/view/document/name/RFP-...
 
 Leads (no RFP): 2 new
-- Comptech Computer Technologies, Inc, $127,914 award from Environmental Protection Agency: NON-EISD IT SUPPORT (NEIC), https://www.usaspending.gov/award/CONT_AWD_...
+- Good Build Works LLC, $142,000 award from Department of Commerce: WEBSITE REDESIGN AND MODERNIZATION OF AGENCY PUBLIC PORTAL, https://www.usaspending.gov/award/CONT_AWD_...
 - sofworld.org, Drupal 7, found in page source: <meta name="Generator" content="Drupal 7 (http://drupal.org)" />, first seen 12 Oct 2026, https://www.sofworld.org/
 
-Sources: nten-jobs 23 fetched, 1 matched, 1 new; rfpdb 0 fetched, 0 matched, 0 new; prosper-global 4 fetched, 0 matched, 0 new; sba-subnet 10 fetched, 0 matched, 0 new; daleel-madani 20 fetched, 0 matched, 0 new, 1 credit(s); asae-solutions-hub blocked (HTTP 403 from the site's load balancer on every path tried); ungm blocked (notices load through a JavaScript POST this adapter does not reproduce; the plain GET always returns the empty search template); afdb blocked (Cloudflare challenge on the RSS feed itself); save-the-children blocked (Cloudflare challenge on the tenders page); usaspending-awards 9 fetched, 2 matched, 2 new
+Sources: nten-jobs 23 fetched, 1 matched, 1 new; rfpdb 0 fetched, 0 matched, 0 new; prosper-global 4 fetched, 0 matched, 0 new; sba-subnet 10 fetched, 0 matched, 0 new; daleel-madani 20 fetched, 0 matched, 0 new, 1 ignored, 1 credit(s); asae-solutions-hub blocked (HTTP 403 from the site's load balancer on every path tried); ungm blocked (notices load through a JavaScript POST this adapter does not reproduce; the plain GET always returns the empty search template); afdb blocked (Cloudflare challenge on the RSS feed itself); save-the-children blocked (Cloudflare challenge on the tenders page); usaspending-awards 34 fetched, 1 matched, 1 new
 ```
+
+The `daleel-madani` line above shows "1 ignored": one of its 20 fetched calls matched an entry in `[ignore].substrings` and never reached matching at all. `usaspending-awards` shows how much `include_words`/`exclude_words`/the per-recipient cap narrow things down: 34 new awards fetched, 1 survives as a real build-work lead.
 
 `state.json` in the data folder remembers every listing's ID once it's
 been posted (an RFP's URL, an award's link, or a bare domain), so the

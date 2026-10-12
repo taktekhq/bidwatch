@@ -156,6 +156,39 @@ func TestRun_MeteredSourceReportsCreditsInTheMessage(t *testing.T) {
 	}
 }
 
+func TestRun_IgnoreListDropsAListingByTitleOrURLRegardlessOfKind(t *testing.T) {
+	now := time.Date(2026, 10, 12, 8, 47, 0, 0, time.UTC)
+	future := now.AddDate(0, 0, 10)
+
+	src := sources.Source{Name: "daleel-madani", Fetch: func(ctx context.Context, c *http.Client, ua string) ([]model.Listing, error) {
+		return []model.Listing{
+			{ID: "https://daleel-madani.org/calls/call-proposals-social-media-agency", Title: "Call for Proposals - Social Media Agency", Buyer: "Michel Issa Foundation", Deadline: &future, URL: "https://daleel-madani.org/calls/call-proposals-social-media-agency"},
+			{ID: "https://example.org/website-rfp", Title: "Website Redesign RFP", Buyer: "Acme", Deadline: &future, URL: "https://example.org/website-rfp"},
+		}, nil
+	}}
+	seen := fakeSeen{seen: map[string]bool{}}
+
+	c := cfg()
+	c.Ignore.Substrings = []string{"call-proposals-social-media-agency"}
+	summary := Run(context.Background(), c, seen, []sources.Source{src}, &http.Client{}, now)
+
+	if len(summary.New) != 1 {
+		t.Fatalf("expected 1 match (the ignored one dropped), got %d: %+v", len(summary.New), summary.New)
+	}
+	if summary.New[0].Title != "Website Redesign RFP" {
+		t.Errorf("wrong listing survived: %+v", summary.New[0])
+	}
+	if strings.Contains(summary.Message, "Social Media Agency") {
+		t.Errorf("ignored listing leaked into the message: %s", summary.Message)
+	}
+	if summary.Counts[0].Ignored != 1 {
+		t.Errorf("Ignored count = %d, want 1", summary.Counts[0].Ignored)
+	}
+	if !strings.Contains(summary.Message, "1 ignored") {
+		t.Errorf("message should show the ignored count: %s", summary.Message)
+	}
+}
+
 func TestRun_NoNewMatchesStillNamesEverySource(t *testing.T) {
 	now := time.Now()
 	empty := sources.Source{Name: "empty-source", Fetch: func(ctx context.Context, c *http.Client, ua string) ([]model.Listing, error) {

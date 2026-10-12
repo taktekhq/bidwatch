@@ -167,6 +167,45 @@ channel = "C0C8CUJVCT0"
 	if c.EOLTech.PerPage != 25 {
 		t.Errorf("EOLTech.PerPage = %d, want default 25", c.EOLTech.PerPage)
 	}
+	if len(c.USAspending.IncludeWords) == 0 {
+		t.Error("expected default USAspending.IncludeWords to be filled in")
+	}
+	if len(c.USAspending.ExcludeWords) == 0 {
+		t.Error("expected default USAspending.ExcludeWords to be filled in")
+	}
+}
+
+func TestLoad_ReadsIgnoreList(t *testing.T) {
+	path := writeTOML(t, `
+[ignore]
+substrings = ["call-proposals-social-media-agency", "some-other-decided-against"]
+`)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Ignore.Substrings) != 2 {
+		t.Fatalf("Ignore.Substrings = %v, want 2 entries", c.Ignore.Substrings)
+	}
+}
+
+func TestLoad_ReadsUSAspendingFilterOverrides(t *testing.T) {
+	path := writeTOML(t, `
+[usaspending]
+include_words = ["website"]
+exclude_words = ["license"]
+prefer_small_business = true
+`)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.USAspending.IncludeWords) != 1 || c.USAspending.IncludeWords[0] != "website" {
+		t.Errorf("IncludeWords = %v, want [\"website\"] (not the default list)", c.USAspending.IncludeWords)
+	}
+	if !c.USAspending.PreferSmallBusiness {
+		t.Error("expected PreferSmallBusiness true")
+	}
 }
 
 func TestLoad_ReadsUSAspendingAndEOLTechToggles(t *testing.T) {

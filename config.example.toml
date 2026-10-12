@@ -62,10 +62,40 @@ api_key_command = ""
 # are leads (a company just awarded a contract, worth approaching as a
 # subcontractor), never RFPs: by the time an award shows up, there's
 # nothing left to bid on.
-window_days = 7       # look at awards with an action date in the trailing N days
+#
+# The query asks for date_type "new_awards_only" (USAspending's own
+# documented way to exclude a modification to an older award whose
+# action date just moved, not a new award) and sorts newest first.
+window_days = 7       # look at new awards in the trailing N days
 min_amount  = 25000    # award amount floor (USD), inclusive
 max_amount  = 500000   # award amount ceiling (USD), inclusive
 naics_codes = ["541511", "541512", "541519", "518210"]  # software/web/IT
+
+# A description needs at least one of these (whole word, case
+# insensitive) to read like real build work...
+include_words = [
+  "develop", "development", "design", "website", "web", "portal",
+  "application", "app", "platform", "modernization", "migration",
+  "integration", "dashboard", "ux", "accessibility", "508",
+  "data pipeline", "automation",
+]
+# ...and none of these, or it reads like a purchase, not a project.
+# Include a plural separately if it matters ("licenses" alongside
+# "license"): these are whole-word matches too, so one form never
+# silently covers the other.
+exclude_words = [
+  "license", "licenses", "licence", "licences", "renewal", "renewals",
+  "subscription", "subscriptions", "maintenance", "support", "hardware",
+  "equipment", "radio", "medical", "lab", "seats", "seat",
+]
+# At most one lead posts per recipient per run regardless of these
+# filters (the newest of that recipient's qualifying awards); this
+# isn't a setting, it's always on.
+
+# When true, a recipient whose business categories (read from the
+# award's own detail page) mention "small" sorts ahead of the rest,
+# rather than dropping anyone.
+prefer_small_business = true
 
 [eol_tech]
 # eol_tech_drupal7 finds live Drupal 7 sites (no security patches since
@@ -87,6 +117,14 @@ per_page = 25
 # marked as seen yet, so it's eligible to post on a later run instead of
 # being lost.
 max_per_run = 10
+
+[ignore]
+# Case-insensitive substrings matched against every listing's title and
+# URL, from any source, RFP or lead, before matching runs. For a
+# standing "no": something already decided against, so it never posts
+# again even under a different URL. Empty by default; say why each one
+# is here.
+substrings = []
 
 [sources]
 # Each source is a small adapter; see README.md for what each one reads

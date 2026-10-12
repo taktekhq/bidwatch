@@ -1,28 +1,67 @@
 {
   "results": [
     {
+      "Award ID": "68HE0827F0099",
+      "Recipient Name": "GOOD BUILD WORKS LLC",
+      "Award Amount": 142000.00,
+      "Awarding Agency": "Department of Commerce",
+      "Description": "WEBSITE REDESIGN AND MODERNIZATION OF AGENCY PUBLIC PORTAL",
+      "generated_internal_id": "CONT_AWD_GOOD_BUILD_WORKS",
+      "Base Obligation Date": "2026-10-10"
+    },
+    {
+      "Award ID": "47QACA27F0004",
+      "Recipient Name": "GOVSMART, INC.",
+      "Award Amount": 108600.0,
+      "Awarding Agency": "General Services Administration",
+      "Description": "CSAT KNOWBE4 SECURITY AWARENESS COMPLIANCE PLUS SUBSCRIPTION RENEWAL",
+      "generated_internal_id": "CONT_AWD_GOVSMART_RENEWAL",
+      "Base Obligation Date": "2026-10-09"
+    },
+    {
       "Award ID": "68HE0827F0001",
       "Recipient Name": "COMPTECH COMPUTER TECHNOLOGIES, INC",
       "Award Amount": 127913.76,
       "Awarding Agency": "Environmental Protection Agency",
       "Description": "NON-EISD IT SUPPORT (NEIC)",
-      "generated_internal_id": "CONT_AWD_68HE0827F0001_6800_47QTCA19D00BT_4732"
+      "generated_internal_id": "CONT_AWD_68HE0827F0001_6800_47QTCA19D00BT_4732",
+      "Base Obligation Date": "2026-10-09"
     },
     {
-      "Award ID": "2031ZB27F00002",
-      "Recipient Name": "SOFTWARE INFORMATION RESOURCE CORP.",
-      "Award Amount": 197540.50,
-      "Awarding Agency": "Department of the Treasury",
-      "Description": "PURCHASING OF FIFTY (50) AUTOCAD ANNUAL SOFTWARE SUBSCRIPTIONS, INCLUDING SPECIALIZED TOOLSETS AND SUPPORT FOR THE DESIGN TEAM ACROSS ALL REGIONAL OFFICES FOR THE NEXT TWELVE MONTHS",
-      "generated_internal_id": "CONT_AWD_2031ZB27F00002_2041_47QTCA23D001S_4732"
+      "Award ID": "68HE0827F0100",
+      "Recipient Name": "GOOD BUILD WORKS LLC",
+      "Award Amount": 50000.00,
+      "Awarding Agency": "Department of Commerce",
+      "Description": "SECOND AWARD TO THE SAME RECIPIENT: ACCESSIBILITY 508 REMEDIATION",
+      "generated_internal_id": "CONT_AWD_GOOD_BUILD_WORKS_2",
+      "Base Obligation Date": "2026-10-08"
     },
     {
       "Award ID": "NO-RECIPIENT",
       "Recipient Name": "",
       "Award Amount": 50000,
       "Awarding Agency": "Some Agency",
-      "Description": "Should be skipped: no recipient name",
-      "generated_internal_id": "CONT_AWD_SKIP_ME"
+      "Description": "Should be skipped: no recipient name, build-shaped text: new web application",
+      "generated_internal_id": "CONT_AWD_SKIP_ME",
+      "Base Obligation Date": "2026-10-07"
+    },
+    {
+      "Award ID": "80NSSC27FA011",
+      "Recipient Name": "METGREEN SOLUTIONS INC",
+      "Award Amount": 71260.40,
+      "Awarding Agency": "National Aeronautics and Space Administration",
+      "Description": "FORTINET FORTIGATE 401G FIREWALL, TRANSCEIVER MODULE & SERVICES",
+      "generated_internal_id": "CONT_AWD_METGREEN_HARDWARE",
+      "Base Obligation Date": "2026-10-06"
+    },
+    {
+      "Award ID": "2031ZB27F00099",
+      "Recipient Name": "LONG DESCRIPTION DEVELOPERS LLC",
+      "Award Amount": 197540.50,
+      "Awarding Agency": "Department of the Treasury",
+      "Description": "DEVELOPMENT AND INTEGRATION OF A NEW CUSTOMER DASHBOARD APPLICATION WITH DATA PIPELINE AUTOMATION ACROSS ALL REGIONAL OFFICES FOR THE NEXT TWELVE MONTHS INCLUDING UX WORK AND ACCESSIBILITY TESTING",
+      "generated_internal_id": "CONT_AWD_LONG_DESC_DEVELOPERS",
+      "Base Obligation Date": "2026-10-05"
     }
   ]
 }
