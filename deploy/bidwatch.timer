@@ -1,11 +1,12 @@
-# Fires bidwatch.service once a week, Monday morning. See
-# bidwatch.service for install steps.
+# Fires bidwatch.service once a day, morning. See bidwatch.service for
+# install steps. Drop the day-of-week filter on OnCalendar (e.g.
+# "Mon *-*-* 08:47:00") instead, if you'd rather run weekly.
 
 [Unit]
-Description=bidwatch weekly run
+Description=bidwatch daily run
 
 [Timer]
-OnCalendar=Mon *-*-* 08:47:00
+OnCalendar=*-*-* 08:47:00
 Persistent=true
 
 [Install]

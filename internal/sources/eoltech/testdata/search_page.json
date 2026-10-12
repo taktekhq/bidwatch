@@ -1,0 +1,27 @@
+{
+  "query": "\"Drupal 7\" site:org",
+  "page": 1,
+  "per_page": 25,
+  "total": 2,
+  "total_pages": 1,
+  "returned": 2,
+  "truncated": false,
+  "results": [
+    {
+      "domain": "sofworld.org",
+      "url": "https://www.sofworld.org/",
+      "rank": 184233,
+      "ranked": true,
+      "snippets": [
+        {"text": "<meta name=\"Generator\" content=\"Drupal 7 (http://drupal.org)\" />", "match": "Drupal 7"}
+      ]
+    },
+    {
+      "domain": "pveducation.org",
+      "url": "https://www.pveducation.org/",
+      "rank": null,
+      "ranked": false,
+      "snippets": []
+    }
+  ]
+}

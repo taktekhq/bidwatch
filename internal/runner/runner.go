@@ -27,15 +27,18 @@ type SourceCount struct {
 	Fetched int
 	Matched int
 	New     int
+	Credits int    // metered API credits this source spent (e.g. Firecrawl); 0 for every plain-HTTP source
 	Blocked string // non-empty if the source was blocked; Fetched/Matched/New are all 0 then
 	Err     string // non-empty on an unexpected error other than a block
 }
 
 // Summary is what one run produced.
 type Summary struct {
-	Counts  []SourceCount
-	New     []model.Listing // matched listings not already in state, across all sources
-	Message string
+	Counts      []SourceCount
+	New         []model.Listing // matched RFP listings not already in state, across all sources
+	NewLeads    []model.Listing // matched lead listings not already in state, before the per-run cap
+	PostedLeads []model.Listing // NewLeads after the cap; what the message actually shows and what gets marked seen
+	Message     string
 }
 
 // Seen is the subset of state.State a run needs; defined here so runner
@@ -51,7 +54,8 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 	rules := match.Rules{Keywords: cfg.Match.Keywords, Excludes: cfg.Match.Excludes}
 
 	var counts []SourceCount
-	var newListings []model.Listing
+	var newRFPs []model.Listing
+	var newLeads []model.Listing
 
 	for i, src := range srcs {
 		if i > 0 {
@@ -59,7 +63,10 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 		}
 
 		sc := SourceCount{Name: src.Name}
-		listings, err := src.Fetch(ctx, client, cfg.UserAgent)
+		var credits int
+		fetchCtx := sources.WithCredits(ctx, &credits)
+		listings, err := src.Fetch(fetchCtx, client, cfg.UserAgent)
+		sc.Credits = credits
 		if err != nil {
 			var be *sources.BlockedError
 			if errors.As(err, &be) {
@@ -73,6 +80,18 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 
 		sc.Fetched = len(listings)
 		for _, l := range listings {
+			if l.Kind == model.KindLead {
+				// A lead's own adapter already applied its source-specific
+				// filter (an amount band and NAICS codes, or a Drupal 7
+				// site-code match): bidwatch's keyword/exclude rules are
+				// for RFP boards and don't apply here.
+				sc.Matched++
+				if seen.IsNew(l.ID) {
+					sc.New++
+					newLeads = append(newLeads, l)
+				}
+				continue
+			}
 			res := match.Check(l, "", rules, now)
 			if !res.Matched {
 				continue
@@ -80,16 +99,16 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 			sc.Matched++
 			if seen.IsNew(l.ID) {
 				sc.New++
-				newListings = append(newListings, l)
+				newRFPs = append(newRFPs, l)
 			}
 		}
 		counts = append(counts, sc)
 	}
 
-	sort.Slice(newListings, func(i, j int) bool {
-		di, dj := newListings[i].Deadline, newListings[j].Deadline
+	sort.Slice(newRFPs, func(i, j int) bool {
+		di, dj := newRFPs[i].Deadline, newRFPs[j].Deadline
 		if di == nil && dj == nil {
-			return newListings[i].Title < newListings[j].Title
+			return newRFPs[i].Title < newRFPs[j].Title
 		}
 		if di == nil {
 			return false
@@ -99,21 +118,34 @@ func Run(ctx context.Context, cfg *config.Config, seen Seen, srcs []sources.Sour
 		}
 		return di.Before(*dj)
 	})
+	sort.Slice(newLeads, func(i, j int) bool {
+		if newLeads[i].Source != newLeads[j].Source {
+			return newLeads[i].Source < newLeads[j].Source
+		}
+		return newLeads[i].Title < newLeads[j].Title
+	})
+
+	postedLeads := newLeads
+	if cfg.Leads.MaxPerRun > 0 && len(postedLeads) > cfg.Leads.MaxPerRun {
+		postedLeads = postedLeads[:cfg.Leads.MaxPerRun]
+	}
 
 	return Summary{
-		Counts:  counts,
-		New:     newListings,
-		Message: formatMessage(newListings, counts),
+		Counts:      counts,
+		New:         newRFPs,
+		NewLeads:    newLeads,
+		PostedLeads: postedLeads,
+		Message:     formatMessage(newRFPs, postedLeads, len(newLeads), counts),
 	}
 }
 
-func formatMessage(newListings []model.Listing, counts []SourceCount) string {
+func formatMessage(newRFPs []model.Listing, postedLeads []model.Listing, totalNewLeads int, counts []SourceCount) string {
 	var b strings.Builder
-	if len(newListings) == 0 {
-		b.WriteString("bidwatch: no new matches this week\n")
+	if len(newRFPs) == 0 {
+		b.WriteString("bidwatch: no new matches today\n")
 	} else {
-		fmt.Fprintf(&b, "bidwatch: %d new match(es) this week\n", len(newListings))
-		for _, l := range newListings {
+		fmt.Fprintf(&b, "bidwatch: %d new match(es) today\n", len(newRFPs))
+		for _, l := range newRFPs {
 			deadline := "no stated deadline"
 			if l.Deadline != nil {
 				deadline = l.Deadline.Format("2 Jan 2006")
@@ -126,6 +158,19 @@ func formatMessage(newListings []model.Listing, counts []SourceCount) string {
 		}
 	}
 
+	b.WriteString("\nLeads (no RFP): ")
+	if totalNewLeads == 0 {
+		b.WriteString("no new leads\n")
+	} else {
+		fmt.Fprintf(&b, "%d new\n", len(postedLeads))
+		for _, l := range postedLeads {
+			fmt.Fprintf(&b, "- %s, %s, %s\n", l.Title, l.Detail, l.URL)
+		}
+		if held := totalNewLeads - len(postedLeads); held > 0 {
+			fmt.Fprintf(&b, "(%d more new lead(s) held back this run, capped at %d; they carry over to a future run)\n", held, len(postedLeads))
+		}
+	}
+
 	b.WriteString("\nSources: ")
 	parts := make([]string, 0, len(counts))
 	for _, c := range counts {
@@ -135,9 +180,18 @@ func formatMessage(newListings []model.Listing, counts []SourceCount) string {
 		case c.Err != "":
 			parts = append(parts, fmt.Sprintf("%s error (%s)", c.Name, c.Err))
 		default:
-			parts = append(parts, fmt.Sprintf("%s %d fetched, %d matched, %d new", c.Name, c.Fetched, c.Matched, c.New))
+			part := fmt.Sprintf("%s %d fetched, %d matched, %d new", c.Name, c.Fetched, c.Matched, c.New)
+			if c.Credits > 0 {
+				part += fmt.Sprintf(", %d credit(s)", c.Credits)
+			}
+			parts = append(parts, part)
 		}
 	}
 	b.WriteString(strings.Join(parts, "; "))
-	return b.String()
+
+	// Belt and suspenders, on top of every adapter's own plain-comma
+	// formatting: nothing posted to Slack is ever allowed to carry an em
+	// dash, even if a source's own copied text (a title, a description)
+	// happened to contain one.
+	return strings.ReplaceAll(b.String(), "—", ", ")
 }

@@ -60,3 +60,24 @@ func CloudflareChallenge(resp *http.Response, body []byte) bool {
 	}
 	return false
 }
+
+// creditsKey is the context key a metered adapter (one that spends a paid
+// API's credits, like Firecrawl) reports its spend on, without changing
+// the Fetcher signature every adapter implements.
+type creditsKey struct{}
+
+// WithCredits returns a context carrying a credits sink for one source's
+// fetch. The runner calls this once per source so a per-run count of what
+// got spent can be shown in the Slack message and runs.log, even though
+// most adapters never spend anything and never call ReportCredits.
+func WithCredits(ctx context.Context, sink *int) context.Context {
+	return context.WithValue(ctx, creditsKey{}, sink)
+}
+
+// ReportCredits adds n to ctx's credits sink, if Run gave it one. An
+// adapter with nothing metered to report never calls this.
+func ReportCredits(ctx context.Context, n int) {
+	if sink, ok := ctx.Value(creditsKey{}).(*int); ok {
+		*sink += n
+	}
+}

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -78,6 +79,80 @@ func TestRun_ReportsNewMatchesAndSourceCounts(t *testing.T) {
 	}
 	if strings.Contains(summary.Message, "—") {
 		t.Errorf("message must never contain an em dash: %s", summary.Message)
+	}
+}
+
+func TestRun_LeadsBypassKeywordRulesAndGetTheirOwnSection(t *testing.T) {
+	now := time.Date(2026, 10, 12, 8, 47, 0, 0, time.UTC)
+
+	leadSrc := sources.Source{Name: "usaspending-awards", Fetch: func(ctx context.Context, c *http.Client, ua string) ([]model.Listing, error) {
+		return []model.Listing{
+			// "Catering" would fail the RFP keyword rules, but a lead
+			// never runs through match.Check at all.
+			{ID: "https://example.org/award/1", Kind: model.KindLead, Title: "Catering Robotics LLC", Detail: "$99,000 award from USDA: Catering automation", URL: "https://example.org/award/1"},
+		}, nil
+	}}
+	seen := fakeSeen{seen: map[string]bool{}}
+
+	c := cfg()
+	summary := Run(context.Background(), c, seen, []sources.Source{leadSrc}, &http.Client{}, now)
+
+	if len(summary.New) != 0 {
+		t.Fatalf("expected no RFP matches, got %d", len(summary.New))
+	}
+	if len(summary.PostedLeads) != 1 {
+		t.Fatalf("expected 1 posted lead, got %d: %+v", len(summary.PostedLeads), summary.PostedLeads)
+	}
+	if !strings.Contains(summary.Message, "Leads (no RFP): 1 new") {
+		t.Errorf("message missing the leads section: %s", summary.Message)
+	}
+	if !strings.Contains(summary.Message, "Catering Robotics LLC") {
+		t.Errorf("message missing the lead's title: %s", summary.Message)
+	}
+}
+
+func TestRun_LeadsAreCappedPerRunAndOverflowCarriesOver(t *testing.T) {
+	now := time.Now()
+	leadSrc := sources.Source{Name: "eol-tech-drupal7", Fetch: func(ctx context.Context, c *http.Client, ua string) ([]model.Listing, error) {
+		var out []model.Listing
+		for i := 0; i < 3; i++ {
+			id := fmt.Sprintf("domain-%d.org", i)
+			out = append(out, model.Listing{ID: id, Kind: model.KindLead, Title: id, Detail: "Drupal 7", URL: "https://" + id})
+		}
+		return out, nil
+	}}
+	seen := fakeSeen{seen: map[string]bool{}}
+
+	c := cfg()
+	c.Leads.MaxPerRun = 2
+	summary := Run(context.Background(), c, seen, []sources.Source{leadSrc}, &http.Client{}, now)
+
+	if len(summary.NewLeads) != 3 {
+		t.Fatalf("expected 3 total new leads found, got %d", len(summary.NewLeads))
+	}
+	if len(summary.PostedLeads) != 2 {
+		t.Fatalf("expected the cap to hold posted leads to 2, got %d", len(summary.PostedLeads))
+	}
+	if !strings.Contains(summary.Message, "1 more new lead(s) held back") {
+		t.Errorf("message should say the overflow carries over: %s", summary.Message)
+	}
+}
+
+func TestRun_MeteredSourceReportsCreditsInTheMessage(t *testing.T) {
+	now := time.Now()
+	metered := sources.Source{Name: "daleel-madani", Fetch: func(ctx context.Context, c *http.Client, ua string) ([]model.Listing, error) {
+		sources.ReportCredits(ctx, 2)
+		return nil, nil
+	}}
+	seen := fakeSeen{seen: map[string]bool{}}
+
+	summary := Run(context.Background(), cfg(), seen, []sources.Source{metered}, &http.Client{}, now)
+
+	if len(summary.Counts) != 1 || summary.Counts[0].Credits != 2 {
+		t.Fatalf("expected 2 credits recorded, got %+v", summary.Counts)
+	}
+	if !strings.Contains(summary.Message, "2 credit(s)") {
+		t.Errorf("message should show credits spent: %s", summary.Message)
 	}
 }
 

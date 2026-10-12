@@ -1,12 +1,15 @@
 # bidwatch
 
-Checks a short list of public contract and RFP boards once a week, matches
-new postings against your own keyword list, and posts anything new to
-Slack. Plain HTTP requests and plain rules: no browser, no account, no AI
-or model call anywhere in it.
+Checks a short list of public contract and RFP boards, matches new
+postings against your own keyword list, and posts anything new to Slack.
+A couple of extra sources go further upstream, before any RFP exists:
+companies just awarded a federal contract (worth approaching as a
+subcontractor) and live end-of-life tech sites (worth a quiet, free
+"your site needs attention" note). Plain HTTP requests and plain rules
+otherwise: no browser, no account, no AI or model call anywhere in it.
 
-bidwatch never applies to anything and never bids. It tells you what showed
-up; you decide what to do with it.
+bidwatch never applies to anything and never bids. It tells you what
+showed up; you decide what to do with it.
 
 ## What it reads
 
@@ -19,17 +22,66 @@ the others. Checked 12 Oct 2026:
 | The RFP Database (rfpdb.com), web development / software / information technology categories | General RFP board, any buyer | Working |
 | Mercy Corps / Prosper Global tenders (prosperglobal.org/tenders) | Mercy Corps programs worldwide | Working |
 | SBA SUBNet (legacy.sba.gov) | US federal prime contractors' subcontracting posts | Working (mostly construction/trades right now; the keyword filter just finds nothing some weeks) |
-| Daleel Madani calls for proposals (daleel-madani.org) | Lebanese NGOs and INGOs | Blocked: Cloudflare challenge on every request |
+| Daleel Madani calls for proposals (daleel-madani.org), read through Firecrawl | Lebanese NGOs and INGOs | Working (needs a Firecrawl API key; see below) |
 | ASAE Solutions Hub (solutionshq.asaecenter.org) | US trade and professional associations | Blocked: HTTP 403 on every path tried |
 | UNGM public notice search (ungm.org) | UN agencies | Blocked: the result list only loads through a JavaScript call this adapter doesn't reproduce; a plain GET always returns the empty search template |
 | AfDB corporate procurement RSS feed | African Development Bank | Blocked: Cloudflare challenge, even on the feed URL itself |
 | Save the Children tenders (savethechildren.net) | Save the Children country offices | Blocked: Cloudflare challenge on every request |
+| USAspending.gov award search (api.usaspending.gov, public, no key) | Small new federal software/web/IT contract awards, as subcontracting leads | Working |
+| PublicWWW source-code search (publicwww.com), for live Drupal 7 sites | End-of-life tech sites, as outreach leads | Needs a paid PublicWWW API key; off by default (see below) |
 
 A blocked source is never routed around: no browser, no cookie jar, no
 different user agent pretending to be something else. Each blocked
 adapter still runs its one request every time, in case the block lifts,
-and the weekly Slack message always says which sources are blocked, so a
-dead source stays visible instead of silently dropping out.
+and the Slack message always says which sources are blocked, so a dead
+source stays visible instead of silently dropping out.
+
+### Daleel Madani, through Firecrawl
+
+A plain HTTP GET against Daleel Madani's calls-for-proposals board gets
+a Cloudflare challenge page on every request (checked 12 Oct 2026). This
+adapter reads the page through the [Firecrawl](https://www.firecrawl.dev)
+API instead, with proxy **"basic" only**: never "auto" (which can
+escalate to "stealth", i.e. ban evasion), "stealth" or "enhanced". If
+even "basic" gets challenged, the source reports blocked rather than
+asking Firecrawl to try harder, the same never-route-around-a-block rule
+every other adapter follows.
+
+Set `firecrawl.api_key_command` in `config.toml` (or the
+`FIRECRAWL_API_KEY` environment variable) to your own Firecrawl key.
+With neither set, this source is left out of every run, not attempted
+unauthenticated. One Firecrawl call per run, roughly 1 to 5 credits
+depending on the page; credits actually spent show up in the Slack
+message's per-source line and in `runs.log`.
+
+### Leads: USAspending awards and end-of-life tech sites
+
+Two sources look upstream of any posted RFP and post to a separate
+"Leads (no RFP)" section of the same message, capped at
+`leads.max_per_run` (default 10) so a daily run never floods the
+channel. Anything over the cap just isn't marked seen yet, so it's still
+eligible to post on a later run rather than being lost; a given award or
+domain still posts at most once, ever, the same as every other listing.
+
+- **USAspending.gov awards**: a public, no-key JSON API search for new
+  contract awards in the trailing `usaspending.window_days` (default 7),
+  in `usaspending.naics_codes` (default: software/web/IT), with an
+  amount between `usaspending.min_amount` and `usaspending.max_amount`
+  (default $25,000 to $500,000). The recipient is the lead: a company to
+  approach as a subcontractor, not a buyer to bid against; by the time an
+  award shows up here, there's nothing left to bid on.
+- **End-of-life tech (Drupal 7)**: Drupal stopped shipping security
+  patches for Drupal 7 in January 2025, so a live Drupal 7 site is a
+  lead worth a free, no-strings note. Found through
+  [PublicWWW](https://publicwww.com)'s source-code search API, filtered
+  server-side to `.org` domains with a `site:org` query. PublicWWW's
+  documented API requires a key issued on a **paid plan**
+  (publicwww.com/docs/api/: "Getting a key... A paid plan is required");
+  there's no free, unauthenticated way to get a real result count from
+  it, so this source is **off by default**
+  (`sources.eol_tech_drupal7 = false`). Set
+  `eol_tech.publicwww_api_key_command` (or `PUBLICWWW_API_KEY`) and turn
+  the source on if you have a PublicWWW plan.
 
 ## Install
 
@@ -53,8 +105,9 @@ cp config.example.toml ~/bidwatch-data/config.toml
 ```
 
 Edit `config.toml`: your Slack channel, how to get a bot token, your
-keyword and exclude lists, and which sources to turn on. The comments in
-`config.example.toml` explain each setting.
+keyword and exclude lists, which sources to turn on, and, if you want
+them, a Firecrawl key (Daleel Madani) and a PublicWWW key (end-of-life
+tech leads). The comments in `config.example.toml` explain each setting.
 
 ### Get a Slack bot token
 
@@ -65,7 +118,14 @@ in. bidwatch reads the token one of two ways:
 - Set the `SLACK_BOT_TOKEN` environment variable, or
 - Set `token_command` in `config.toml` to a shell command whose output is
   the token, for example a password manager CLI. bidwatch runs that
-  command itself and never prints or logs the token.
+  command itself (through `sh -c`, so a pipeline works too, for example
+  piping a secret through a second program to pull one field out of a
+  JSON-wrapped value) and never prints or logs the token.
+
+Every other API key in `config.toml` (Firecrawl, PublicWWW) resolves the
+same way: an environment variable first, then its own `*_command`
+setting. Unlike the Slack token, a missing key for one of these just
+leaves that one source out of the run; it's never fatal to the rest.
 
 ## Run it
 
@@ -75,10 +135,10 @@ bidwatch
 ```
 
 That fetches every source turned on in `config.toml`, applies the match
-rules, drops anything already posted on an earlier run, and posts one
-Slack message: either the list of new matches (title, buyer, deadline,
-link) or a one-line "no new matches", always followed by a per-source
-count line so a dead source is visible.
+rules (or, for a lead source, its own filter), drops anything already
+posted on an earlier run, and posts one Slack message: the list of new
+RFP matches (or a one-line "no new matches"), a "Leads (no RFP)"
+section, and always a per-source count line so a dead source is visible.
 
 ```
 bidwatch -dry-run   # print the message, post nothing, change no state
@@ -92,26 +152,40 @@ the config somewhere else (for example, in a repo under a name other than
 ## What the message looks like
 
 ```
-bidwatch: 2 new match(es) this week
+bidwatch: 2 new match(es) today
 - Website Redesign and Development (RFP), CAMWS, deadline 30 Oct 2026, https://www.nten.org/jobs/website-redesign-and-development-rfp
 - RFP #: P-2027-2 SS4A Safety Action Plan, buyer not stated, deadline 4 Nov 2026, https://www.rfpdb.com/view/document/name/RFP-...
 
-Sources: nten-jobs 23 fetched, 1 matched, 1 new; rfpdb 0 fetched, 0 matched, 0 new; prosper-global 4 fetched, 0 matched, 0 new; sba-subnet 10 fetched, 0 matched, 0 new; daleel-madani blocked (Cloudflare challenge on the calls-for-proposal page); asae-solutions-hub blocked (HTTP 403 from the site's load balancer on every path tried); ungm blocked (notices load through a JavaScript POST this adapter does not reproduce; the plain GET always returns the empty search template); afdb blocked (Cloudflare challenge on the RSS feed itself); save-the-children blocked (Cloudflare challenge on the tenders page)
+Leads (no RFP): 2 new
+- Comptech Computer Technologies, Inc, $127,914 award from Environmental Protection Agency: NON-EISD IT SUPPORT (NEIC), https://www.usaspending.gov/award/CONT_AWD_...
+- sofworld.org, Drupal 7, found in page source: <meta name="Generator" content="Drupal 7 (http://drupal.org)" />, first seen 12 Oct 2026, https://www.sofworld.org/
+
+Sources: nten-jobs 23 fetched, 1 matched, 1 new; rfpdb 0 fetched, 0 matched, 0 new; prosper-global 4 fetched, 0 matched, 0 new; sba-subnet 10 fetched, 0 matched, 0 new; daleel-madani 20 fetched, 0 matched, 0 new, 1 credit(s); asae-solutions-hub blocked (HTTP 403 from the site's load balancer on every path tried); ungm blocked (notices load through a JavaScript POST this adapter does not reproduce; the plain GET always returns the empty search template); afdb blocked (Cloudflare challenge on the RSS feed itself); save-the-children blocked (Cloudflare challenge on the tenders page); usaspending-awards 9 fetched, 2 matched, 2 new
 ```
 
-`state.json` in the data folder remembers every listing's URL once it's
-been posted, so the same opportunity never shows up twice. `runs.log`
-gets one line per run with a timestamp and the new-match count.
+`state.json` in the data folder remembers every listing's ID once it's
+been posted (an RFP's URL, an award's link, or a bare domain), so the
+same opportunity, award or site never shows up twice. `runs.log` gets
+one line per run with a timestamp, the new-match count, how many leads
+posted versus were held back by the cap, and any metered API credits
+spent.
 
 ## Matching rules
 
-A listing matches when its title (plus a short description, where a
-source gives one) contains at least one of your `keywords`, contains none
-of your `excludes`, and its deadline, if the source states one, is still
-in the future. A listing with no stated deadline passes through rather
-than being guessed at. All of this is plain string matching, case
-insensitive; there's no model call anywhere in bidwatch, so it costs
-nothing to run and never "forgets" a rule.
+An RFP-board listing matches when its title (plus a short description,
+where a source gives one) contains at least one of your `keywords`,
+contains none of your `excludes`, and its deadline, if the source states
+one, is still in the future. A listing with no stated deadline passes
+through rather than being guessed at. All of this is plain string
+matching, case insensitive; there's no model call anywhere in bidwatch,
+so it costs nothing to run and never "forgets" a rule.
+
+A lead (USAspending award, end-of-life tech site) never runs through
+`[match]` at all: its own adapter already applied a source-specific
+filter (an amount band and NAICS codes, or a Drupal 7 site-code match),
+so `keywords`/`excludes` would either do nothing useful or wrongly drop
+a real lead whose description doesn't happen to contain one of your RFP
+keywords.
 
 ## Running it for someone else
 
@@ -128,21 +202,22 @@ Nothing about the first person's data folder is read or touched.
 ## Schedule it
 
 - **macOS (launchd):** `deploy/com.example.bidwatch.plist` is a template
-  for a weekly Monday-morning run. Copy it into
-  `~/Library/LaunchAgents/`, edit the three paths inside, and
-  `launchctl bootstrap` it. The comments in the file walk through it.
+  for a daily 08:47 run. Copy it into `~/Library/LaunchAgents/`, edit the
+  paths inside, and `launchctl bootstrap` it. The comments in the file
+  walk through it.
 - **Linux (systemd):** `deploy/bidwatch.service` and `deploy/bidwatch.timer`
   do the same thing as a systemd user timer. See the comments in
   `bidwatch.service` for the install steps.
-- **Anything else (cron):** a plain weekly cron line works too, since
+- **Anything else (cron):** a plain daily cron line works too, since
   bidwatch is a single run with no server to keep alive:
-  `47 8 * * 1 BIDWATCH_DATA=$HOME/bidwatch-data /path/to/bidwatch`.
+  `47 8 * * * BIDWATCH_DATA=$HOME/bidwatch-data /path/to/bidwatch`.
 
 Each source is one polite HTTP request (a few seconds apart from the
-others, per `delay_between_sources_seconds`), so a weekly run finishes in
-well under a minute; there's nothing here that needs a lock against
-itself unless you're worried about two schedulers overlapping, in which
-case any flock-style wrapper in front of the binary works.
+others, per `delay_between_sources_seconds`), so a run finishes in well
+under a minute; there's nothing here that needs a lock against itself
+unless you're worried about two schedulers overlapping, in which case any
+flock-style wrapper in front of the binary works (`deploy/com.example.bidwatch.plist`
+shows one such wrapper in its comments).
 
 ## Testing
 
@@ -151,12 +226,15 @@ go test ./...
 go vet ./...
 ```
 
-The match and state logic has its own unit tests. Every source adapter is
-tested against a small, trimmed fixture taken from a real response (saved
-under each package's `testdata/`), including the blocked ones, which are
-tested against a mock server that returns the same Cloudflare-challenge
-or HTTP-403 shape the real site returned when this was written. Nothing in
-the test suite makes a real network request.
+The match, state and runner logic has its own unit tests. Every source
+adapter is tested against a small, trimmed fixture taken from a real
+response (saved under each package's `testdata/`), including the
+blocked ones, which are tested against a mock server that returns the
+same Cloudflare-challenge, HTTP-403 or bot-challenge shape the real
+source returned when this was written, and the Firecrawl- and
+PublicWWW-backed adapters, which are tested against a mock server
+standing in for Firecrawl or the PublicWWW API, not the real site.
+Nothing in the test suite makes a real network request.
 
 ## License
 

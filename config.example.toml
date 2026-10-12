@@ -1,7 +1,7 @@
 # bidwatch config. Copy this file to your data folder as config.toml and
-# edit it there. Nothing in this file is secret; the Slack token is
-# resolved at runtime from SLACK_BOT_TOKEN or slack.token_command below,
-# never written here.
+# edit it there. Nothing in this file is secret; every token or API key
+# is resolved at runtime from an environment variable or a *_command
+# setting below, never written here.
 
 # Honest User-Agent sent with every request. Name the bot; this is not a
 # browser fingerprint.
@@ -14,17 +14,21 @@ delay_between_sources_seconds = 3
 request_timeout_seconds = 30
 
 [slack]
-# The channel bidwatch posts its one weekly message to, by ID (starts
+# The channel bidwatch posts its one daily message to, by ID (starts
 # with "C") rather than name; a bot token can't look up a name reliably.
 channel = "C0000000000"
 # Resolves the bot token at runtime. Overridden by the SLACK_BOT_TOKEN
-# environment variable when set. Set this to a command whose stdout is
-# the token, for example your password manager's CLI; bidwatch runs it
-# itself and never prints or logs what it returns.
+# environment variable when set. Set this to a shell command whose
+# stdout is the token (it runs through "sh -c", so a pipeline works, for
+# example piping a password manager's CLI through a second program to
+# pull one field out of a JSON-wrapped secret); bidwatch runs it itself
+# and never prints or logs what it returns.
 token_command = ""
 
 [match]
-# A listing needs at least one of these, in its title (case-insensitive).
+# An RFP-board listing needs at least one of these, in its title
+# (case-insensitive). Leads (see [usaspending] and [eol_tech] below) are
+# filtered their own way instead and never run through this list.
 keywords = [
   "website", "web", "app", "software", "digital", "platform", "ai",
   "automation", "data", "crm", "salesforce", "seo", "social media",
@@ -37,11 +41,60 @@ excludes = [
   "security guard", "janitorial",
 ]
 
+[firecrawl]
+# daleel_madani reads a Cloudflare-protected page through the Firecrawl
+# API instead of a plain HTTP GET (which always gets a challenge page).
+# Resolves the key at runtime: the FIRECRAWL_API_KEY environment
+# variable first, then this command (run through "sh -c", stdout only,
+# never printed or logged). Empty (no env var, no command) leaves
+# daleel_madani out of every run rather than calling Firecrawl with
+# nothing to authenticate with, or falling back to a plain, blocked
+# request.
+#
+# bidwatch only ever asks Firecrawl for proxy "basic". It never asks for
+# "auto" (which can escalate to "stealth", i.e. ban evasion), "stealth"
+# or "enhanced"; if "basic" is blocked too, the source reports blocked
+# instead of trying harder.
+api_key_command = ""
+
+[usaspending]
+# USAspending.gov's public award-search API needs no key. Matches here
+# are leads (a company just awarded a contract, worth approaching as a
+# subcontractor), never RFPs: by the time an award shows up, there's
+# nothing left to bid on.
+window_days = 7       # look at awards with an action date in the trailing N days
+min_amount  = 25000    # award amount floor (USD), inclusive
+max_amount  = 500000   # award amount ceiling (USD), inclusive
+naics_codes = ["541511", "541512", "541519", "518210"]  # software/web/IT
+
+[eol_tech]
+# eol_tech_drupal7 finds live Drupal 7 sites (no security patches since
+# January 2025) through PublicWWW's source-code search API, filtered
+# server-side to .org with a site:org query. PublicWWW's documented API
+# (api.publicwww.com) requires a key issued on a paid plan; there is no
+# free, unauthenticated way to get a real result count from it (an
+# anonymous request just gets PublicWWW's own bot-challenge page).
+# Resolves the key the same way firecrawl.api_key_command does: the
+# PUBLICWWW_API_KEY environment variable first, then this command.
+# Empty leaves eol_tech_drupal7 out of every run.
+publicwww_api_key_command = ""
+per_page = 25
+
+[leads]
+# usaspending_awards and eol_tech_drupal7 post to a separate "Leads (no
+# RFP)" section of the same message, capped at this many per run so a
+# daily run never floods the channel. Anything over the cap simply isn't
+# marked as seen yet, so it's eligible to post on a later run instead of
+# being lost.
+max_per_run = 10
+
 [sources]
 # Each source is a small adapter; see README.md for what each one reads
 # and which are known to be blocked right now. Turning a blocked one back
 # on costs nothing: it will just report blocked again until the block
-# lifts.
+# lifts. daleel_madani and eol_tech_drupal7 also need their API key
+# above; without one, they're left out of a run regardless of this
+# setting.
 daleel_madani       = true
 nten_jobs           = true
 asae_solutions_hub  = true
@@ -51,3 +104,5 @@ afdb                = true
 save_the_children   = true
 prosper_global      = true
 sba_subnet          = true
+usaspending_awards  = true
+eol_tech_drupal7    = false

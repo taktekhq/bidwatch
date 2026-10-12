@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "Award ID": "68HE0827F0001",
+      "Recipient Name": "COMPTECH COMPUTER TECHNOLOGIES, INC",
+      "Award Amount": 127913.76,
+      "Awarding Agency": "Environmental Protection Agency",
+      "Description": "NON-EISD IT SUPPORT (NEIC)",
+      "generated_internal_id": "CONT_AWD_68HE0827F0001_6800_47QTCA19D00BT_4732"
+    },
+    {
+      "Award ID": "2031ZB27F00002",
+      "Recipient Name": "SOFTWARE INFORMATION RESOURCE CORP.",
+      "Award Amount": 197540.50,
+      "Awarding Agency": "Department of the Treasury",
+      "Description": "PURCHASING OF FIFTY (50) AUTOCAD ANNUAL SOFTWARE SUBSCRIPTIONS, INCLUDING SPECIALIZED TOOLSETS AND SUPPORT FOR THE DESIGN TEAM ACROSS ALL REGIONAL OFFICES FOR THE NEXT TWELVE MONTHS",
+      "generated_internal_id": "CONT_AWD_2031ZB27F00002_2041_47QTCA23D001S_4732"
+    },
+    {
+      "Award ID": "NO-RECIPIENT",
+      "Recipient Name": "",
+      "Award Amount": 50000,
+      "Awarding Agency": "Some Agency",
+      "Description": "Should be skipped: no recipient name",
+      "generated_internal_id": "CONT_AWD_SKIP_ME"
+    }
+  ]
+}

@@ -84,3 +84,105 @@ func TestSlackToken_NoSourceIsAnError(t *testing.T) {
 		t.Fatal("expected an error with no env var and no token_command")
 	}
 }
+
+func TestSlackToken_CommandRunsThroughAShellSoPipesWork(t *testing.T) {
+	c := &Config{}
+	c.Slack.TokenCommand = `echo '{"token":"xoxb-wrapped"}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])'`
+	tok, err := c.SlackToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok != "xoxb-wrapped" {
+		t.Errorf("token = %q", tok)
+	}
+}
+
+func TestFirecrawlAPIKey_EnvVarWins(t *testing.T) {
+	t.Setenv("FIRECRAWL_API_KEY", "fc-test-key")
+	c := &Config{}
+	c.Firecrawl.APIKeyCommand = "echo should-not-run"
+	key, err := c.FirecrawlAPIKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != "fc-test-key" {
+		t.Errorf("key = %q", key)
+	}
+}
+
+func TestFirecrawlAPIKey_EmptyWithNoSourceIsNotAnError(t *testing.T) {
+	c := &Config{}
+	key, err := c.FirecrawlAPIKey()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "" {
+		t.Errorf("key = %q, want empty (daleel_madani disabled, not fatal)", key)
+	}
+}
+
+func TestFirecrawlAPIKey_FailingCommandIsAnError(t *testing.T) {
+	c := &Config{}
+	c.Firecrawl.APIKeyCommand = "false"
+	if _, err := c.FirecrawlAPIKey(); err == nil {
+		t.Fatal("expected an error when the configured command fails, so a broken setup is visible")
+	}
+}
+
+func TestPublicWWWAPIKey_EmptyWithNoSourceIsNotAnError(t *testing.T) {
+	c := &Config{}
+	key, err := c.PublicWWWAPIKey()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "" {
+		t.Errorf("key = %q, want empty (eol_tech_drupal7 disabled, not fatal)", key)
+	}
+}
+
+func TestLoad_FillsLeadsAndUSAspendingDefaults(t *testing.T) {
+	path := writeTOML(t, `
+[slack]
+channel = "C0C8CUJVCT0"
+`)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Leads.MaxPerRun != 10 {
+		t.Errorf("Leads.MaxPerRun = %d, want default 10", c.Leads.MaxPerRun)
+	}
+	if c.USAspending.WindowDays != 7 {
+		t.Errorf("USAspending.WindowDays = %d, want default 7", c.USAspending.WindowDays)
+	}
+	if c.USAspending.MinAmount != 25000 {
+		t.Errorf("USAspending.MinAmount = %v, want default 25000", c.USAspending.MinAmount)
+	}
+	if c.USAspending.MaxAmount != 500000 {
+		t.Errorf("USAspending.MaxAmount = %v, want default 500000", c.USAspending.MaxAmount)
+	}
+	if len(c.USAspending.NAICSCodes) != 4 {
+		t.Errorf("USAspending.NAICSCodes = %v, want 4 defaults", c.USAspending.NAICSCodes)
+	}
+	if c.EOLTech.PerPage != 25 {
+		t.Errorf("EOLTech.PerPage = %d, want default 25", c.EOLTech.PerPage)
+	}
+}
+
+func TestLoad_ReadsUSAspendingAndEOLTechToggles(t *testing.T) {
+	path := writeTOML(t, `
+[sources]
+usaspending_awards = true
+eol_tech_drupal7 = false
+`)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Sources.USAspendingAwards {
+		t.Error("expected usaspending_awards on")
+	}
+	if c.Sources.EOLTechDrupal7 {
+		t.Error("expected eol_tech_drupal7 off")
+	}
+}

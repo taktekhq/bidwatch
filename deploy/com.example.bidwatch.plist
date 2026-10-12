@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  macOS launchd job: runs bidwatch once a week. Copy this file to
+  macOS launchd job: runs bidwatch once a day. Copy this file to
   ~/Library/LaunchAgents/com.example.bidwatch.plist (renaming it to
   something that identifies you, e.g. com.yourname.bidwatch), edit the
   three paths below, then:
@@ -29,10 +29,10 @@
 		<string>-data</string>
 		<string>/path/to/your/bidwatch-data</string>
 	</array>
+	<!-- Fires every day at 08:47. Add a Weekday key (1 = Monday) back in
+	     here if you'd rather run weekly. -->
 	<key>StartCalendarInterval</key>
 	<dict>
-		<key>Weekday</key>
-		<integer>1</integer>
 		<key>Hour</key>
 		<integer>8</integer>
 		<key>Minute</key>

@@ -1,6 +1,8 @@
-// bidwatch checks a short list of public contract/RFP boards against a
-// keyword and exclude list, and posts anything new to Slack. No AI or
-// model call anywhere in it: plain rules, run on a schedule.
+// bidwatch checks a short list of public contract/RFP boards and a
+// couple of lead sources (recent federal awards, end-of-life tech sites)
+// against a keyword/exclude list or their own filters, and posts
+// anything new to Slack. No AI or model call anywhere in it: plain
+// rules, run on a schedule.
 package main
 
 import (
@@ -20,12 +22,14 @@ import (
 	"github.com/taktekhq/bidwatch/internal/sources/afdb"
 	"github.com/taktekhq/bidwatch/internal/sources/asaesolutions"
 	"github.com/taktekhq/bidwatch/internal/sources/daleelmadani"
+	"github.com/taktekhq/bidwatch/internal/sources/eoltech"
 	"github.com/taktekhq/bidwatch/internal/sources/ntenjobs"
 	"github.com/taktekhq/bidwatch/internal/sources/prosperglobal"
 	"github.com/taktekhq/bidwatch/internal/sources/rfpdb"
 	"github.com/taktekhq/bidwatch/internal/sources/savethechildren"
 	"github.com/taktekhq/bidwatch/internal/sources/sbasubnet"
 	"github.com/taktekhq/bidwatch/internal/sources/ungm"
+	"github.com/taktekhq/bidwatch/internal/sources/usaspending"
 	"github.com/taktekhq/bidwatch/internal/state"
 )
 
@@ -56,7 +60,16 @@ func main() {
 	ctx := context.Background()
 	now := time.Now()
 
-	srcs := enabledSources(cfg)
+	firecrawlKey, err := cfg.FirecrawlAPIKey()
+	if err != nil {
+		log.Printf("bidwatch: %s disabled this run, could not resolve the Firecrawl API key: %v", daleelmadani.Name, err)
+	}
+	publicwwwKey, err := cfg.PublicWWWAPIKey()
+	if err != nil {
+		log.Printf("bidwatch: %s disabled this run, could not resolve the PublicWWW API key: %v", eoltech.Name, err)
+	}
+
+	srcs := enabledSources(cfg, firecrawlKey, publicwwwKey)
 	summary := runner.Run(ctx, cfg, st, srcs, client, now)
 
 	fmt.Println(summary.Message)
@@ -77,6 +90,9 @@ func main() {
 	for _, l := range summary.New {
 		st.Mark(l.ID, now)
 	}
+	for _, l := range summary.PostedLeads {
+		st.Mark(l.ID, now)
+	}
 	if err := st.Save(); err != nil {
 		log.Fatalf("bidwatch: save state: %v", err)
 	}
@@ -84,28 +100,37 @@ func main() {
 	appendRunLog(*dataDir, now, summary)
 }
 
-func enabledSources(cfg *config.Config) []sources.Source {
-	all := []struct {
-		on   bool
-		name string
-		fn   sources.Fetcher
-	}{
-		{cfg.Sources.DaleelMadani, daleelmadani.Name, daleelmadani.Fetch},
-		{cfg.Sources.NTENJobs, ntenjobs.Name, ntenjobs.Fetch},
-		{cfg.Sources.ASAESolutionsHub, asaesolutions.Name, asaesolutions.Fetch},
-		{cfg.Sources.RFPdb, rfpdb.Name, rfpdb.Fetch},
-		{cfg.Sources.UNGM, ungm.Name, ungm.Fetch},
-		{cfg.Sources.AfDB, afdb.Name, afdb.Fetch},
-		{cfg.Sources.SaveTheChildren, savethechildren.Name, savethechildren.Fetch},
-		{cfg.Sources.ProsperGlobal, prosperglobal.Name, prosperglobal.Fetch},
-		{cfg.Sources.SBASubNet, sbasubnet.Name, sbasubnet.Fetch},
-	}
+func enabledSources(cfg *config.Config, firecrawlKey, publicwwwKey string) []sources.Source {
 	var out []sources.Source
-	for _, s := range all {
-		if s.on {
-			out = append(out, sources.Source{Name: s.name, Fetch: s.fn})
+	add := func(on bool, name string, fn sources.Fetcher) {
+		if on {
+			out = append(out, sources.Source{Name: name, Fetch: fn})
 		}
 	}
+
+	// daleel_madani needs a Firecrawl key to run at all; no key means
+	// this source is simply left out of the run, not attempted
+	// unauthenticated.
+	add(cfg.Sources.DaleelMadani && firecrawlKey != "", daleelmadani.Name, daleelmadani.New(firecrawlKey))
+	add(cfg.Sources.NTENJobs, ntenjobs.Name, ntenjobs.Fetch)
+	add(cfg.Sources.ASAESolutionsHub, asaesolutions.Name, asaesolutions.Fetch)
+	add(cfg.Sources.RFPdb, rfpdb.Name, rfpdb.Fetch)
+	add(cfg.Sources.UNGM, ungm.Name, ungm.Fetch)
+	add(cfg.Sources.AfDB, afdb.Name, afdb.Fetch)
+	add(cfg.Sources.SaveTheChildren, savethechildren.Name, savethechildren.Fetch)
+	add(cfg.Sources.ProsperGlobal, prosperglobal.Name, prosperglobal.Fetch)
+	add(cfg.Sources.SBASubNet, sbasubnet.Name, sbasubnet.Fetch)
+	add(cfg.Sources.USAspendingAwards, usaspending.Name, usaspending.New(usaspending.Config{
+		WindowDays: cfg.USAspending.WindowDays,
+		MinAmount:  cfg.USAspending.MinAmount,
+		MaxAmount:  cfg.USAspending.MaxAmount,
+		NAICSCodes: cfg.USAspending.NAICSCodes,
+	}))
+	// eol_tech_drupal7 needs a PublicWWW key issued on a paid plan; no
+	// key means this source is left out of the run the same way
+	// daleel_madani is.
+	add(cfg.Sources.EOLTechDrupal7 && publicwwwKey != "", eoltech.Name, eoltech.New(publicwwwKey, cfg.EOLTech.PerPage))
+
 	return out
 }
 
@@ -116,7 +141,14 @@ func appendRunLog(dataDir string, now time.Time, summary runner.Summary) {
 		return
 	}
 	defer f.Close()
-	fmt.Fprintf(f, "%s new=%d sources=%d\n", now.Format(time.RFC3339), len(summary.New), len(summary.Counts))
+
+	credits := 0
+	for _, c := range summary.Counts {
+		credits += c.Credits
+	}
+	fmt.Fprintf(f, "%s new=%d leads_posted=%d leads_held=%d sources=%d credits=%d\n",
+		now.Format(time.RFC3339), len(summary.New), len(summary.PostedLeads),
+		len(summary.NewLeads)-len(summary.PostedLeads), len(summary.Counts), credits)
 }
 
 func envOr(key, fallback string) string {
