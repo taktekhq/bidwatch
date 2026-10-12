@@ -29,6 +29,7 @@ the others. Checked 12 Oct 2026:
 | Save the Children tenders (savethechildren.net) | Save the Children country offices | Blocked: Cloudflare challenge on every request |
 | USAspending.gov award search (api.usaspending.gov, public, no key) | Small new federal software/web/IT contract awards, as subcontracting leads | Working |
 | PublicWWW source-code search (publicwww.com), for live Drupal 7 sites | End-of-life tech sites, as outreach leads | Needs a paid PublicWWW API key; off by default (see below) |
+| CORDIS bulk open-data export (cordis.europa.eu/data), for Horizon Europe projects with no dissemination website listed | Recently started EU-funded research projects, as outreach leads | Built and tested, but off by default: the website-listed field doesn't support the signal (see below) |
 
 A blocked source is never routed around: no browser, no cookie jar, no
 different user agent pretending to be something else. Each blocked
@@ -54,14 +55,14 @@ unauthenticated. One Firecrawl call per run, roughly 1 to 5 credits
 depending on the page; credits actually spent show up in the Slack
 message's per-source line and in `runs.log`.
 
-### Leads: USAspending awards and end-of-life tech sites
+### Leads: USAspending awards, end-of-life tech sites, and CORDIS
 
-Two sources look upstream of any posted RFP and post to a separate
-"Leads (no RFP)" section of the same message, capped at
-`leads.max_per_run` (default 10) so a daily run never floods the
-channel. Anything over the cap just isn't marked seen yet, so it's still
-eligible to post on a later run rather than being lost; a given award or
-domain still posts at most once, ever, the same as every other listing.
+Sources that look upstream of any posted RFP post to a separate "Leads
+(no RFP)" section of the same message, capped at `leads.max_per_run`
+(default 10) so a daily run never floods the channel. Anything over the
+cap just isn't marked seen yet, so it's still eligible to post on a
+later run rather than being lost; a given award, domain or project
+still posts at most once, ever, the same as every other listing.
 
 - **USAspending.gov awards**: a public, no-key JSON API search for new
   contract awards in the trailing `usaspending.window_days` (default 7),
@@ -98,6 +99,50 @@ domain still posts at most once, ever, the same as every other listing.
   (`sources.eol_tech_drupal7 = false`). Set
   `eol_tech.publicwww_api_key_command` (or `PUBLICWWW_API_KEY`) and turn
   the source on if you have a PublicWWW plan.
+- **CORDIS Horizon Europe leads**: built and tested, but **off by
+  default** (`sources.cordis_leads = false`), and left off on purpose.
+  The idea: a Horizon Europe grant agreement requires a dissemination
+  plan, and most multi-partner projects (RIA/IA/CSA) set up a project
+  website in their first few months, so a recently started project
+  (`cordis.window_days`, default 45) with no project website listed is
+  a lead to write to its coordinator. The source reads CORDIS's own
+  free bulk CSV export (cordis.europa.eu/data, one GET, no key) rather
+  than its search page, which only renders through JavaScript.
+
+  Checked 12 Oct 2026: CORDIS's "project website" field
+  (`webLink.csv`, type `relatedWebsite`) turned out to be an
+  editorially curated field, not a systematic one. Counted by project
+  start year across the whole HORIZON dataset, only 13% of 2021-start
+  projects have one recorded, dropping to 1-2% for 2022-2025 and under
+  0.2% for 2026-start projects, even though 2021-2023 projects are
+  3-5 years old now and overwhelmingly have real sites. A direct
+  spot-check of 3 "no website listed" 2022 consortium projects
+  (SolDAC, Photo2Fuel, SSH CENTRE) found all 3 already running real,
+  live project websites CORDIS had simply never recorded.
+
+  That alone could be forgiven if the signal held for the narrow slice
+  this adapter actually targets: a project within `window_days` of its
+  own start date, where "too new to have a site yet" is plausible on
+  its own. The one real run on 12 Oct 2026 tested that directly. The
+  newest eligible cohort (started 2026-10-01, 11 days old: DigiWaves,
+  FarmHeroes, PROCLAIM, EXCELY, RESSORT, the 5 pasted into the task
+  report) held up on a live web search: no dedicated site for any of
+  the 5. But the same run's much larger pool before the per-run cap,
+  the 2026-09-01 cohort (41 days old, several hundred eligible
+  projects, every one of them also lacking a recorded website), told a
+  different story: a 6-project spot-check (ARION, PostQat, OceanNexus,
+  WUNDERWORK, EOSC4ALL, SHIFT 5.0) found 3 of 6 already running real,
+  live dissemination sites (openaire.eu/arion-101287335, postqat.com,
+  oceannexus.eu) that CORDIS had not recorded: roughly a 50%
+  false-positive rate at the older end of the very window this source
+  uses by default. Narrowing the window would only shrink the pool
+  back to a handful a month (the scale opposite.md's own research
+  found), not fix the real problem: the field says almost nothing
+  about whether a project has a site, only whether CORDIS wrote about
+  it, so widening the window for useful volume just lets more
+  already-built sites back in as false positives. Full writeup in
+  `internal/sources/cordis`'s own doc comment; recheck the premise
+  there before setting `cordis_leads = true`.
 
 ### The ignore list
 
@@ -209,11 +254,12 @@ through rather than being guessed at. All of this is plain string
 matching, case insensitive; there's no model call anywhere in bidwatch,
 so it costs nothing to run and never "forgets" a rule.
 
-A lead (USAspending award, end-of-life tech site) never runs through
-`[match]` at all: its own adapter already applied a source-specific
-filter (an amount band and NAICS codes, or a Drupal 7 site-code match),
-so `keywords`/`excludes` would either do nothing useful or wrongly drop
-a real lead whose description doesn't happen to contain one of your RFP
+A lead (USAspending award, end-of-life tech site, CORDIS project) never
+runs through `[match]` at all: its own adapter already applied a
+source-specific filter (an amount band and NAICS codes, a Drupal 7
+site-code match, or a start-date window and website check), so
+`keywords`/`excludes` would either do nothing useful or wrongly drop a
+real lead whose description doesn't happen to contain one of your RFP
 keywords.
 
 ## Running it for someone else
@@ -263,6 +309,9 @@ same Cloudflare-challenge, HTTP-403 or bot-challenge shape the real
 source returned when this was written, and the Firecrawl- and
 PublicWWW-backed adapters, which are tested against a mock server
 standing in for Firecrawl or the PublicWWW API, not the real site.
+CORDIS's tests build a small zip fixture in code (a few CSV rows, the
+same ";"-delimited shape as the real export) rather than committing a
+binary file, so the fixture itself stays readable in the test source.
 Nothing in the test suite makes a real network request.
 
 ## License

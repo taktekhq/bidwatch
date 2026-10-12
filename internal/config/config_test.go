@@ -175,6 +175,61 @@ channel = "C0C8CUJVCT0"
 	}
 }
 
+func TestLoad_FillsCORDISDefaults(t *testing.T) {
+	path := writeTOML(t, `
+[slack]
+channel = "C0C8CUJVCT0"
+`)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.CORDIS.WindowDays != 45 {
+		t.Errorf("CORDIS.WindowDays = %d, want default 45", c.CORDIS.WindowDays)
+	}
+	if len(c.CORDIS.SkipCountries) != 1 || c.CORDIS.SkipCountries[0] != "DE" {
+		t.Errorf("CORDIS.SkipCountries = %v, want default [\"DE\"]", c.CORDIS.SkipCountries)
+	}
+	if c.CORDIS.MaxPerRun != 5 {
+		t.Errorf("CORDIS.MaxPerRun = %d, want default 5", c.CORDIS.MaxPerRun)
+	}
+	if len(c.CORDIS.Programmes) != 0 {
+		t.Errorf("CORDIS.Programmes = %v, want empty by default (no filter)", c.CORDIS.Programmes)
+	}
+}
+
+func TestLoad_ReadsCORDISOverridesAndToggle(t *testing.T) {
+	path := writeTOML(t, `
+[cordis]
+window_days = 30
+skip_countries = ["DE", "AT"]
+programmes = ["HORIZON-CL5"]
+max_per_run = 3
+
+[sources]
+cordis_leads = true
+`)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.CORDIS.WindowDays != 30 {
+		t.Errorf("CORDIS.WindowDays = %d, want 30", c.CORDIS.WindowDays)
+	}
+	if len(c.CORDIS.SkipCountries) != 2 {
+		t.Errorf("CORDIS.SkipCountries = %v, want 2 entries", c.CORDIS.SkipCountries)
+	}
+	if len(c.CORDIS.Programmes) != 1 || c.CORDIS.Programmes[0] != "HORIZON-CL5" {
+		t.Errorf("CORDIS.Programmes = %v, want [\"HORIZON-CL5\"]", c.CORDIS.Programmes)
+	}
+	if c.CORDIS.MaxPerRun != 3 {
+		t.Errorf("CORDIS.MaxPerRun = %d, want 3", c.CORDIS.MaxPerRun)
+	}
+	if !c.Sources.CORDISLeads {
+		t.Error("expected cordis_leads on")
+	}
+}
+
 func TestLoad_ReadsIgnoreList(t *testing.T) {
 	path := writeTOML(t, `
 [ignore]

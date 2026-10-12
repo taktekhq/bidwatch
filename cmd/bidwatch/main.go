@@ -21,6 +21,7 @@ import (
 	"github.com/taktekhq/bidwatch/internal/sources"
 	"github.com/taktekhq/bidwatch/internal/sources/afdb"
 	"github.com/taktekhq/bidwatch/internal/sources/asaesolutions"
+	"github.com/taktekhq/bidwatch/internal/sources/cordis"
 	"github.com/taktekhq/bidwatch/internal/sources/daleelmadani"
 	"github.com/taktekhq/bidwatch/internal/sources/eoltech"
 	"github.com/taktekhq/bidwatch/internal/sources/ntenjobs"
@@ -133,6 +134,16 @@ func enabledSources(cfg *config.Config, firecrawlKey, publicwwwKey string) []sou
 	// key means this source is left out of the run the same way
 	// daleel_madani is.
 	add(cfg.Sources.EOLTechDrupal7 && publicwwwKey != "", eoltech.Name, eoltech.New(publicwwwKey, cfg.EOLTech.PerPage))
+	// cordis_leads needs no key (CORDIS's bulk export is public), but see
+	// internal/sources/cordis's own doc comment before turning it on:
+	// off by default, because CORDIS's "project website" field doesn't
+	// support the signal this was built to read.
+	add(cfg.Sources.CORDISLeads, cordis.Name, cordis.New(cordis.Config{
+		WindowDays:    cfg.CORDIS.WindowDays,
+		SkipCountries: cfg.CORDIS.SkipCountries,
+		Programmes:    cfg.CORDIS.Programmes,
+		MaxPerRun:     cfg.CORDIS.MaxPerRun,
+	}))
 
 	return out
 }

@@ -46,6 +46,19 @@ type Config struct {
 		PreferSmallBusiness bool     `toml:"prefer_small_business"`
 	} `toml:"usaspending"`
 
+	// CORDIS has no key (the bulk export is public); these are the
+	// filters applied after it's downloaded and parsed. See
+	// internal/sources/cordis's own doc comment before turning
+	// sources.cordis_leads on: the source is built and tested, but off
+	// by default, because CORDIS's own "project website" field turned
+	// out not to support the signal it was built to read.
+	CORDIS struct {
+		WindowDays    int      `toml:"window_days"`
+		SkipCountries []string `toml:"skip_countries"`
+		Programmes    []string `toml:"programmes"`
+		MaxPerRun     int      `toml:"max_per_run"`
+	} `toml:"cordis"`
+
 	// Ignore holds substrings matched, case-insensitively, against a
 	// listing's title or URL, for anything Nizar already decided
 	// against: it never posts again even if a source lists it under a
@@ -82,6 +95,7 @@ type Config struct {
 		SBASubNet         bool `toml:"sba_subnet"`
 		USAspendingAwards bool `toml:"usaspending_awards"`
 		EOLTechDrupal7    bool `toml:"eol_tech_drupal7"`
+		CORDISLeads       bool `toml:"cordis_leads"`
 	} `toml:"sources"`
 }
 
@@ -136,6 +150,15 @@ func (c *Config) applyDefaults() {
 	}
 	if c.EOLTech.PerPage <= 0 {
 		c.EOLTech.PerPage = 25
+	}
+	if c.CORDIS.WindowDays <= 0 {
+		c.CORDIS.WindowDays = 45
+	}
+	if len(c.CORDIS.SkipCountries) == 0 {
+		c.CORDIS.SkipCountries = []string{"DE"}
+	}
+	if c.CORDIS.MaxPerRun <= 0 {
+		c.CORDIS.MaxPerRun = 5
 	}
 	if c.Leads.MaxPerRun <= 0 {
 		c.Leads.MaxPerRun = 10

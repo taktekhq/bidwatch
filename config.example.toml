@@ -110,6 +110,46 @@ prefer_small_business = true
 publicwww_api_key_command = ""
 per_page = 25
 
+[cordis]
+# cordis_leads reads CORDIS's free bulk open-data export (the HORIZON
+# Projects CSV at cordis.europa.eu/data, no key, no auth, one GET) for
+# recently started Horizon Europe research projects that look like they
+# haven't set up a dissemination website yet. See
+# internal/sources/cordis's own doc comment for the full writeup before
+# turning this on.
+#
+# OFF BY DEFAULT (sources.cordis_leads = false below), and left off on
+# purpose: checked 12 Oct 2026, CORDIS's "project website" field
+# (webLink.csv, type "relatedWebsite") is populated for only 1-2% of
+# ALL Horizon Europe projects regardless of age, including projects
+# 3-5 years old that overwhelmingly have real sites by now. The one
+# real run on 12 Oct 2026 confirmed it still breaks down inside this
+# adapter's own default window: the newest eligible projects (11 days
+# old) checked out fine, but a spot-check of the much larger pool at
+# the older end of the 45-day window (41 days old) found half already
+# running real sites CORDIS never recorded. "The field is empty" means
+# "CORDIS hasn't written about this one," not "this project has no
+# website," and that holds at almost any age inside the window.
+# Turning this on would flag a lot of leads that already have a real
+# site bidwatch just can't see; that's noise, not a signal. Built and
+# tested anyway, in case CORDIS ever records this field systematically
+# or a better per-project signal shows up in its open data; recheck
+# the premise (see the package doc comment) before flipping this on.
+window_days = 45   # a SIGNED project with a startDate in the trailing N days
+skip_countries = ["DE"]  # coordinator country codes to skip; Taktek's own cold-email rules skip Germany
+# Optional: keep only a project whose legalBasis, masterCall or subCall
+# contains (case-insensitive substring) one of these, e.g.
+# "HORIZON-CL5" for the Climate, Energy and Mobility cluster. Empty
+# (the default) means every Horizon Europe programme area.
+programmes = []
+# At most this many leads per run, before the shared [leads].max_per_run
+# cap below (and always at most one lead per coordinator per run,
+# which isn't a setting). Solo ERC grants and individual MSCA
+# fellowships are always excluded: there's no consortium to coordinate
+# dissemination for, so "needs a project website" doesn't read the
+# same way it does for a multi-partner RIA/IA/CSA project.
+max_per_run = 5
+
 [leads]
 # usaspending_awards and eol_tech_drupal7 post to a separate "Leads (no
 # RFP)" section of the same message, capped at this many per run so a
@@ -144,3 +184,7 @@ prosper_global      = true
 sba_subnet          = true
 usaspending_awards  = true
 eol_tech_drupal7    = false
+# Off on purpose: see [cordis] above and internal/sources/cordis's own
+# doc comment. Built and tested, but the "project website" field it
+# reads doesn't support the signal it was built to read.
+cordis_leads        = false
