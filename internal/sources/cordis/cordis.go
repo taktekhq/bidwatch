@@ -1,15 +1,15 @@
 // Package cordis adapts CORDIS's free bulk open-data export (the HORIZON
-// Projects CSV at cordis.europa.eu/data) to find recently started Horizon
-// Europe research projects that look like they haven't set up a
-// dissemination website yet. A Horizon Europe grant agreement requires a
-// dissemination plan, and most multi-partner consortium projects
-// (RIA/IA/CSA) set up a dedicated project website in their first few
-// months; a project with nothing listed, or a listed site that's gone
-// dead, is a direct, no-strings lead. Its coordinator (a university,
-// research centre or company) is who to write to, the same
-// "lead-to-approach, not a buyer to bid against" shape as the usaspending
-// adapter: by the time a Horizon Europe grant is signed, there's nothing
-// open to bid on.
+// Projects CSV at cordis.europa.eu/data) to find Horizon Europe research
+// projects, recently started or about to start, that look like they
+// haven't set up a dissemination website yet. A Horizon Europe grant
+// agreement requires a dissemination plan, and most multi-partner
+// consortium projects (RIA/IA/CSA) set up a dedicated project website in
+// their first few months; a project with nothing listed, or a listed
+// site that's gone dead, is a direct, no-strings lead. Its coordinator
+// (a university, research centre or company) is who to write to, the
+// same "lead-to-approach, not a buyer to bid against" shape as the
+// usaspending adapter: by the time a Horizon Europe grant is signed,
+// there's nothing open to bid on.
 //
 // Data source, and why: researched in
 // monetization/research/contracting/opposite.md (12 Oct 2026). CORDIS's
@@ -27,56 +27,48 @@
 // periodically, not live, so a run is always a few weeks behind CORDIS's
 // own pages.
 //
-// IMPORTANT, read before turning sources.cordis_leads back on: this
-// source shipped built and tested, but disabled by default
-// (config.example.toml and Taktek's own config both set
-// cordis_leads = false), because the data does not support the "empty
-// website field means no website" premise it was built for.
+// Why the window looks backward AND forward, read before changing
+// WindowDays or WindowAheadDays: this source first shipped backward-only
+// (WindowDays 45, no forward window), then got disabled the same day.
+// webLink.csv's "relatedWebsite" rows (what this adapter reads as "a
+// project website is listed") turned out to be an editorially curated
+// field, not a systematic one: only 13% of 2021-start projects have one
+// recorded, dropping under 1% for 2022-2025, even though those projects
+// are years old and overwhelmingly have real sites by now (3 spot-
+// checked 2022 projects, SolDAC, Photo2Fuel, SSH CENTRE, all 3 already
+// had live sites CORDIS never recorded). The first real run (WindowDays
+// 45, backward only) showed why that matters in practice: its newest
+// eligible cohort (started 11 days earlier) checked out clean on a live
+// web search, but its much larger older cohort (started 41 days
+// earlier, several hundred projects) didn't: a 6-project spot-check
+// found 3 of 6 (ARION, PostQat, OceanNexus) already running real sites
+// CORDIS hadn't recorded, a roughly 50% false-positive rate.
 //
-// Checked 12 Oct 2026: webLink.csv's "relatedWebsite" rows (what this
-// adapter reads as "a project website is listed") are an editorially
-// curated field, not a systematic one. Counted by project start year,
-// only 13% of 2021-start projects have one recorded, dropping to roughly
-// 1-2% for 2022-2025 and under 0.2% for 2026-start projects, even though
-// 2021-2023 projects are 3-5 years old now and overwhelmingly have real
-// sites. A direct spot-check of 3 "no website listed" 2022 consortium
-// projects (SolDAC, Photo2Fuel, SSH CENTRE) found all 3 already running
-// real, live project websites (soldac-project.eu, photo2fuel.eu,
-// sshcentre.eu) that CORDIS never recorded; each project's own CORDIS
-// page confirms it too, showing a "Website" link for member
-// organisations but never one for the project itself.
-//
-// That alone could be forgiven if the signal still held for the narrow
-// slice this adapter actually targets: a SIGNED consortium project
-// within WindowDays of its own startDate, where "genuinely too new to
-// have built a site yet" is plausible on its own, independent of
-// CORDIS's record-keeping. The one real run on 12 Oct 2026 (WindowDays
-// 45, MaxPerRun 5) tested that directly, by hand, split by how old each
-// eligible project actually was. The newest cohort (started 2026-10-01,
-// 11 days old at run time: DigiWaves, FarmHeroes, PROCLAIM, EXCELY,
-// RESSORT, the 5 the run actually posted) held up: a live web search
-// found no dedicated project site for any of the 5. But the same run's
-// much larger eligible pool before the per-run cap, the 2026-09-01
-// cohort (41 days old, several hundred SIGNED consortium projects, every
-// one of them also lacking a recorded website), told a different story:
-// a 6-project spot-check (ARION, PostQat, OceanNexus, WUNDERWORK,
-// EOSC4ALL, SHIFT 5.0) found 3 of 6 already running real, live
-// dissemination websites (openaire.eu/arion-101287335, postqat.com,
-// oceannexus.eu, live within 4 weeks of kickoff) that CORDIS had not
-// recorded: a roughly 50% false-positive rate at the older end of the
-// very window this source is configured to use by default. Narrowing
-// WindowDays would only shrink the pool back to the handful-a-month
-// "just signed" sliver (the scale opposite.md's own research already
-// found: "5 genuine multi-partner ones pulled today"), not fix the
-// underlying problem: CORDIS's field says almost nothing about whether a
-// project has a site, only whether CORDIS got around to writing about
-// it, so widening the window for useful volume just lets more
-// already-built sites back in as false positives. Built and tested
-// anyway, with a working one-GET/no-key data source, dedupe and cap, in
-// case CORDIS ever starts recording this field systematically or a
-// better per-project signal shows up elsewhere in its open data; only the
-// premise behind "field empty" needs rechecking before flipping the
-// config flag back on.
+// The fix isn't a narrower backward window, it's a forward one. Counting
+// the 22 Sep export by start month found 468 Horizon Europe projects
+// starting 2026-10, 165 in 2026-11, 72 in 2026-12 and 406 in 2027-01,
+// none of them with a webLink recorded yet, for the obvious reason: they
+// haven't started. A project that hasn't started yet is the strongest
+// version of this lead there is: it has no site, none is overdue, and
+// nobody has approached its coordinator. So WindowDays now stays tight
+// (Taktek's own config uses 21, not the original 45) to keep the
+// backward-looking, already-might-have-built-one risk small, while
+// WindowAheadDays (Taktek's own config uses 60) does the heavy lifting:
+// a huge, low-risk, naturally expiring pool of projects that simply
+// cannot have a site yet, sorted soonest-start-date first so the most
+// time-critical ones (about to start, or that just did) win the
+// MaxPerRun cap ahead of ones still months out. Re-enabled 12 Oct 2026;
+// a second real run against this design (posted to
+// #contracting-opportunities at 21:01:34 EEST, ts 1791828094.970119)
+// correctly skipped the 5 the first run had already marked seen and
+// posted 5 different ones, still from the same 2026-10-01 cohort: with
+// WindowDays tightened to 21 and nothing qualifying between 21 and 11
+// days back, the 11-day-old cohort (the one that checked out clean the
+// first time) is still the soonest-dated, so it keeps winning the cap
+// until that pool drains; a future-dated lead will start appearing
+// once it does. Recheck the backward side before widening WindowDays
+// back out, since that's the part of the window the first run showed
+// breaks down.
 package cordis
 
 import (
@@ -129,6 +121,14 @@ var consortiumSchemes = map[string]bool{
 // usaspending.
 type Config struct {
 	WindowDays int // a SIGNED project with a startDate in the trailing N days
+	// WindowAheadDays extends the window forward: a SIGNED project
+	// whose startDate is up to this many days in the future also
+	// qualifies. A project that hasn't started yet is the strongest
+	// possible version of this lead (it has no site, none is overdue
+	// yet, and nobody's approached its coordinator), so a run weighted
+	// toward "starting soon" rather than only "started recently" is the
+	// point, not a side effect.
+	WindowAheadDays int
 	// SkipCountries drops any project whose coordinator's country code
 	// (ISO 3166-1 alpha-2, as CORDIS stores it) is in this list.
 	// Default ["DE"]: Taktek's own cold-email rules skip Germany.
@@ -162,10 +162,13 @@ type candidate struct {
 
 // New returns a Fetcher that downloads CORDIS's bulk HORIZON-projects CSV
 // export once, finds SIGNED consortium projects (RIA/IA/CSA and their JU
-// and EURATOM equivalents) with a startDate in the trailing cfg.WindowDays
-// days, drops any whose coordinator's country is in cfg.SkipCountries or
-// that don't match cfg.Programmes, and keeps the rest only if CORDIS lists
-// no project website for them or the one it lists doesn't resolve.
+// and EURATOM equivalents) with a startDate between cfg.WindowDays days
+// ago and cfg.WindowAheadDays days from now, drops any whose
+// coordinator's country is in cfg.SkipCountries or that don't match
+// cfg.Programmes, and keeps the rest only if CORDIS lists no project
+// website for them or the one it lists doesn't resolve. Candidates come
+// back soonest-start-date first: a project about to start (or that just
+// did) is a more urgent lead than one still months out.
 func New(cfg Config) sources.Fetcher {
 	return func(ctx context.Context, client *http.Client, ua string) ([]model.Listing, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, dataURL, nil)
@@ -212,6 +215,7 @@ func New(cfg Config) sources.Fetcher {
 
 		now := nowFunc().UTC()
 		windowStart := now.AddDate(0, 0, -cfg.WindowDays)
+		windowEnd := now.AddDate(0, 0, cfg.WindowAheadDays)
 
 		var candidates []candidate
 		for _, p := range projects {
@@ -225,7 +229,7 @@ func New(cfg Config) sources.Fetcher {
 			if err != nil {
 				continue
 			}
-			if sd.Before(windowStart) || sd.After(now) {
+			if sd.Before(windowStart) || sd.After(windowEnd) {
 				continue
 			}
 			if len(cfg.Programmes) > 0 && !matchesProgramme(p, cfg.Programmes) {
@@ -258,18 +262,29 @@ func New(cfg Config) sources.Fetcher {
 					Kind:    model.KindLead,
 					Title:   strings.TrimSpace(coord.name),
 					Country: coord.country,
-					Detail:  buildDetail(p, coord, reason, deadURL),
+					Detail:  buildDetail(p, coord, reason, deadURL, sd.After(now)),
 					URL:     link,
 				},
 			})
 		}
 
-		// Newest start date first, so "at most one lead per coordinator
-		// per run" below keeps that coordinator's newest qualifying
-		// project, the same choice usaspending makes for a recipient with
-		// more than one qualifying award.
+		// Soonest start date first (the earliest startDate in the whole
+		// backward-and-forward window sorts first): a project about to
+		// start, or that just did, is a more urgent lead than one still
+		// months out, so it's also the one "at most one lead per
+		// coordinator per run" keeps below for a coordinator with more
+		// than one qualifying project. This does mean a project that
+		// already started (anywhere in WindowDays) always sorts ahead of
+		// one that hasn't (anywhere in WindowAheadDays), since a past
+		// date is numerically earlier than a future one; that's fine in
+		// practice, not just in theory, because state.json marks a lead
+		// seen forever: the backward pool is kept deliberately small
+		// (WindowDays 21, not the original 45) so it drains fast run
+		// over run, and once today's backward candidates are already
+		// posted, the next-soonest unseen candidates are increasingly
+		// the forward ones, which is the whole point of adding them.
 		sort.SliceStable(candidates, func(i, j int) bool {
-			return candidates[i].startDate.After(candidates[j].startDate)
+			return candidates[i].startDate.Before(candidates[j].startDate)
 		})
 
 		seen := map[string]bool{}
@@ -288,13 +303,17 @@ func New(cfg Config) sources.Fetcher {
 	}
 }
 
-func buildDetail(p projectRow, coord coordinator, reason, deadURL string) string {
+func buildDetail(p projectRow, coord coordinator, reason, deadURL string, upcoming bool) string {
 	status := reason
 	if deadURL != "" {
 		status = reason + ": " + deadURL
 	}
-	return fmt.Sprintf("coordinator of %s (%s), %s, %s Horizon Europe grant, started %s, %s",
-		p.acronym, shorten(p.title, 80), coord.country, formatAmount(parseAmount(p.ecMaxContribution)), p.startDate, status)
+	verb := "started"
+	if upcoming {
+		verb = "starts"
+	}
+	return fmt.Sprintf("coordinator of %s (%s), %s, %s Horizon Europe grant, %s %s, %s",
+		p.acronym, shorten(p.title, 80), coord.country, formatAmount(parseAmount(p.ecMaxContribution)), verb, p.startDate, status)
 }
 
 func matchesProgramme(p projectRow, programmes []string) bool {

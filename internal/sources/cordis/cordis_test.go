@@ -22,14 +22,19 @@ var fixedNow = time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
 
 func testConfig() Config {
 	return Config{
-		WindowDays:    45,
-		SkipCountries: []string{"DE"},
-		MaxPerRun:     5,
+		WindowDays:      21,
+		WindowAheadDays: 60,
+		SkipCountries:   []string{"DE"},
+		MaxPerRun:       5,
 	}
 }
 
 func daysAgo(n int) string {
 	return fixedNow.AddDate(0, 0, -n).Format("2006-01-02")
+}
+
+func daysAhead(n int) string {
+	return fixedNow.AddDate(0, 0, n).Format("2006-01-02")
 }
 
 // csvBytes writes rows (header first) as CORDIS's own ";"-delimited CSV,
@@ -296,12 +301,12 @@ func TestFetch_ExcludesSoloFellowshipAndERCSchemes(t *testing.T) {
 	}
 }
 
-func TestFetch_OneLeadPerCoordinatorPerRunKeepsTheNewest(t *testing.T) {
+func TestFetch_OneLeadPerCoordinatorPerRunKeepsTheSoonest(t *testing.T) {
 	zipBody := buildZip(t, map[string][]byte{
 		"project.csv": csvBytes(t, [][]string{
 			projectHeader(),
-			{"P1", "OLDER", "SIGNED", "An older project, same coordinator", daysAgo(40), "100000", "HORIZON-RIA", "", "", ""},
-			{"P2", "NEWER", "SIGNED", "A newer project, same coordinator", daysAgo(5), "100000", "HORIZON-RIA", "", "", ""},
+			{"P1", "SOONER", "SIGNED", "Starts soon, same coordinator", daysAhead(10), "100000", "HORIZON-RIA", "", "", ""},
+			{"P2", "LATER", "SIGNED", "Starts later, same coordinator", daysAhead(50), "100000", "HORIZON-RIA", "", "", ""},
 		}),
 		"organization.csv": csvBytes(t, [][]string{
 			orgHeader(),
@@ -319,8 +324,92 @@ func TestFetch_OneLeadPerCoordinatorPerRunKeepsTheNewest(t *testing.T) {
 	if len(listings) != 1 {
 		t.Fatalf("expected exactly 1 lead for a coordinator with 2 qualifying projects, got %d: %+v", len(listings), listings)
 	}
-	if !strings.Contains(listings[0].Detail, "NEWER") {
-		t.Errorf("Detail = %q, want the newer (P2/NEWER) project kept, not the older one", listings[0].Detail)
+	if !strings.Contains(listings[0].Detail, "SOONER") {
+		t.Errorf("Detail = %q, want the soonest-starting (P1/SOONER) project kept, not the one starting later", listings[0].Detail)
+	}
+}
+
+func TestFetch_FutureStartWithinAheadWindowIsIncluded(t *testing.T) {
+	zipBody := buildZip(t, map[string][]byte{
+		"project.csv": csvBytes(t, [][]string{
+			projectHeader(),
+			{"P1", "UPCOMING", "SIGNED", "Not started yet, within the ahead window", daysAhead(30), "100000", "HORIZON-RIA", "", "", ""},
+		}),
+		"organization.csv": csvBytes(t, [][]string{
+			orgHeader(),
+			{"P1", "coordinator", "UPCOMING UNI", "FR"},
+		}),
+		"webLink.csv": csvBytes(t, [][]string{webLinkHeader()}),
+	})
+	setFixture(t, zipBody)
+
+	listings, err := New(testConfig())(context.Background(), http.DefaultClient, "test-ua")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(listings) != 1 || listings[0].Title != "UPCOMING UNI" {
+		t.Fatalf("expected the not-yet-started project (30 days out, within WindowAheadDays 60) to be a lead, got %+v", listings)
+	}
+	if !strings.Contains(listings[0].Detail, "starts "+daysAhead(30)) {
+		t.Errorf("Detail = %q, want it to say \"starts\", not \"started\", for a future project", listings[0].Detail)
+	}
+}
+
+func TestFetch_FutureStartBeyondAheadWindowIsExcluded(t *testing.T) {
+	zipBody := buildZip(t, map[string][]byte{
+		"project.csv": csvBytes(t, [][]string{
+			projectHeader(),
+			{"P1", "TOOSOON", "SIGNED", "Not started yet, but beyond the ahead window", daysAhead(90), "100000", "HORIZON-RIA", "", "", ""},
+		}),
+		"organization.csv": csvBytes(t, [][]string{
+			orgHeader(),
+			{"P1", "coordinator", "TOO SOON UNI", "FR"},
+		}),
+		"webLink.csv": csvBytes(t, [][]string{webLinkHeader()}),
+	})
+	setFixture(t, zipBody)
+
+	listings, err := New(testConfig())(context.Background(), http.DefaultClient, "test-ua")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(listings) != 0 {
+		t.Fatalf("expected the project starting 90 days out (beyond WindowAheadDays 60) to be excluded, got %+v", listings)
+	}
+}
+
+func TestFetch_SoonestStartDateFirstAcrossDifferentCoordinators(t *testing.T) {
+	zipBody := buildZip(t, map[string][]byte{
+		"project.csv": csvBytes(t, [][]string{
+			projectHeader(),
+			{"P1", "FAR", "SIGNED", "Starts far in the future", daysAhead(55), "100000", "HORIZON-RIA", "", "", ""},
+			{"P2", "SOON", "SIGNED", "Starts soon", daysAhead(3), "100000", "HORIZON-RIA", "", "", ""},
+			{"P3", "RECENT", "SIGNED", "Started a little while ago", daysAgo(15), "100000", "HORIZON-RIA", "", "", ""},
+		}),
+		"organization.csv": csvBytes(t, [][]string{
+			orgHeader(),
+			{"P1", "coordinator", "FAR UNI", "FR"},
+			{"P2", "coordinator", "SOON UNI", "FR"},
+			{"P3", "coordinator", "RECENT UNI", "FR"},
+		}),
+		"webLink.csv": csvBytes(t, [][]string{webLinkHeader()}),
+	})
+	setFixture(t, zipBody)
+
+	cfg := testConfig()
+	cfg.MaxPerRun = 2
+	listings, err := New(cfg)(context.Background(), http.DefaultClient, "test-ua")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(listings) != 2 {
+		t.Fatalf("expected the MaxPerRun cap to hold at 2, got %d: %+v", len(listings), listings)
+	}
+	// RECENT (15 days ago) sorts before SOON (3 days ahead), which sorts
+	// before FAR (55 days ahead): earliest startDate first across the
+	// whole backward-and-forward window. FAR loses out to the 2-lead cap.
+	if listings[0].Title != "RECENT UNI" || listings[1].Title != "SOON UNI" {
+		t.Fatalf("expected [RECENT UNI, SOON UNI] in that order, got %+v", listings)
 	}
 }
 

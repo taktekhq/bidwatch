@@ -48,15 +48,17 @@ type Config struct {
 
 	// CORDIS has no key (the bulk export is public); these are the
 	// filters applied after it's downloaded and parsed. See
-	// internal/sources/cordis's own doc comment before turning
-	// sources.cordis_leads on: the source is built and tested, but off
-	// by default, because CORDIS's own "project website" field turned
-	// out not to support the signal it was built to read.
+	// internal/sources/cordis's own doc comment for why the window
+	// looks both backward (WindowDays) and forward (WindowAheadDays): a
+	// project that hasn't started yet is the strongest version of this
+	// lead, and CORDIS's "project website" field turned out not to
+	// support the backward-only signal this source first shipped with.
 	CORDIS struct {
-		WindowDays    int      `toml:"window_days"`
-		SkipCountries []string `toml:"skip_countries"`
-		Programmes    []string `toml:"programmes"`
-		MaxPerRun     int      `toml:"max_per_run"`
+		WindowDays      int      `toml:"window_days"`
+		WindowAheadDays int      `toml:"window_ahead_days"`
+		SkipCountries   []string `toml:"skip_countries"`
+		Programmes      []string `toml:"programmes"`
+		MaxPerRun       int      `toml:"max_per_run"`
 	} `toml:"cordis"`
 
 	// Ignore holds substrings matched, case-insensitively, against a
@@ -152,7 +154,10 @@ func (c *Config) applyDefaults() {
 		c.EOLTech.PerPage = 25
 	}
 	if c.CORDIS.WindowDays <= 0 {
-		c.CORDIS.WindowDays = 45
+		c.CORDIS.WindowDays = 21
+	}
+	if c.CORDIS.WindowAheadDays <= 0 {
+		c.CORDIS.WindowAheadDays = 60
 	}
 	if len(c.CORDIS.SkipCountries) == 0 {
 		c.CORDIS.SkipCountries = []string{"DE"}

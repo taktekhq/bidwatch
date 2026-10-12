@@ -113,29 +113,25 @@ per_page = 25
 [cordis]
 # cordis_leads reads CORDIS's free bulk open-data export (the HORIZON
 # Projects CSV at cordis.europa.eu/data, no key, no auth, one GET) for
-# recently started Horizon Europe research projects that look like they
-# haven't set up a dissemination website yet. See
-# internal/sources/cordis's own doc comment for the full writeup before
-# turning this on.
+# Horizon Europe research projects, recently started or about to
+# start, that look like they haven't set up a dissemination website
+# yet. See internal/sources/cordis's own doc comment for the full
+# writeup before changing window_days or window_ahead_days.
 #
-# OFF BY DEFAULT (sources.cordis_leads = false below), and left off on
-# purpose: checked 12 Oct 2026, CORDIS's "project website" field
-# (webLink.csv, type "relatedWebsite") is populated for only 1-2% of
-# ALL Horizon Europe projects regardless of age, including projects
-# 3-5 years old that overwhelmingly have real sites by now. The one
-# real run on 12 Oct 2026 confirmed it still breaks down inside this
-# adapter's own default window: the newest eligible projects (11 days
-# old) checked out fine, but a spot-check of the much larger pool at
-# the older end of the 45-day window (41 days old) found half already
-# running real sites CORDIS never recorded. "The field is empty" means
-# "CORDIS hasn't written about this one," not "this project has no
-# website," and that holds at almost any age inside the window.
-# Turning this on would flag a lot of leads that already have a real
-# site bidwatch just can't see; that's noise, not a signal. Built and
-# tested anyway, in case CORDIS ever records this field systematically
-# or a better per-project signal shows up in its open data; recheck
-# the premise (see the package doc comment) before flipping this on.
-window_days = 45   # a SIGNED project with a startDate in the trailing N days
+# This shipped once backward-only (window_days 45, no forward window),
+# got disabled the same day (12 Oct 2026): CORDIS's "project website"
+# field is populated for only 1-2% of ALL Horizon Europe projects
+# regardless of age, and a real run found that a project started 41
+# days earlier had about a 50% chance of already having a real site
+# CORDIS just never recorded, even though its 11-day-old cohort
+# checked out clean. A narrower backward window alone doesn't fix
+# that, a forward one does: a project that hasn't started yet cannot
+# have built a site, full stop, and nobody's approached its
+# coordinator yet either, so it's the strongest version of this lead.
+# window_days now stays tight (keeps the backward, already-might-
+# have-built-one risk small) while window_ahead_days does the volume.
+window_days = 21        # a SIGNED project with a startDate in the trailing N days
+window_ahead_days = 60  # ...or up to this many days in the future (not started yet)
 skip_countries = ["DE"]  # coordinator country codes to skip; Taktek's own cold-email rules skip Germany
 # Optional: keep only a project whose legalBasis, masterCall or subCall
 # contains (case-insensitive substring) one of these, e.g.
@@ -143,11 +139,12 @@ skip_countries = ["DE"]  # coordinator country codes to skip; Taktek's own cold-
 # (the default) means every Horizon Europe programme area.
 programmes = []
 # At most this many leads per run, before the shared [leads].max_per_run
-# cap below (and always at most one lead per coordinator per run,
-# which isn't a setting). Solo ERC grants and individual MSCA
-# fellowships are always excluded: there's no consortium to coordinate
-# dissemination for, so "needs a project website" doesn't read the
-# same way it does for a multi-partner RIA/IA/CSA project.
+# cap below (and always at most one lead per coordinator per run, and
+# soonest start date first, which aren't settings). Solo ERC grants and
+# individual MSCA fellowships are always excluded: there's no
+# consortium to coordinate dissemination for, so "needs a project
+# website" doesn't read the same way it does for a multi-partner
+# RIA/IA/CSA project.
 max_per_run = 5
 
 [leads]
@@ -184,7 +181,7 @@ prosper_global      = true
 sba_subnet          = true
 usaspending_awards  = true
 eol_tech_drupal7    = false
-# Off on purpose: see [cordis] above and internal/sources/cordis's own
-# doc comment. Built and tested, but the "project website" field it
-# reads doesn't support the signal it was built to read.
-cordis_leads        = false
+# See [cordis] above and internal/sources/cordis's own doc comment:
+# the forward-looking window (window_ahead_days) is what makes this
+# one safe to leave on by default, not window_days alone.
+cordis_leads        = true

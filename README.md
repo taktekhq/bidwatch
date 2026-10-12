@@ -29,7 +29,7 @@ the others. Checked 12 Oct 2026:
 | Save the Children tenders (savethechildren.net) | Save the Children country offices | Blocked: Cloudflare challenge on every request |
 | USAspending.gov award search (api.usaspending.gov, public, no key) | Small new federal software/web/IT contract awards, as subcontracting leads | Working |
 | PublicWWW source-code search (publicwww.com), for live Drupal 7 sites | End-of-life tech sites, as outreach leads | Needs a paid PublicWWW API key; off by default (see below) |
-| CORDIS bulk open-data export (cordis.europa.eu/data), for Horizon Europe projects with no dissemination website listed | Recently started EU-funded research projects, as outreach leads | Built and tested, but off by default: the website-listed field doesn't support the signal (see below) |
+| CORDIS bulk open-data export (cordis.europa.eu/data), for Horizon Europe projects with no dissemination website listed | EU-funded research projects starting soon or recently, as outreach leads | Working (see below for why the window looks forward, not just back) |
 
 A blocked source is never routed around: no browser, no cookie jar, no
 different user agent pretending to be something else. Each blocked
@@ -99,50 +99,54 @@ still posts at most once, ever, the same as every other listing.
   (`sources.eol_tech_drupal7 = false`). Set
   `eol_tech.publicwww_api_key_command` (or `PUBLICWWW_API_KEY`) and turn
   the source on if you have a PublicWWW plan.
-- **CORDIS Horizon Europe leads**: built and tested, but **off by
-  default** (`sources.cordis_leads = false`), and left off on purpose.
-  The idea: a Horizon Europe grant agreement requires a dissemination
-  plan, and most multi-partner projects (RIA/IA/CSA) set up a project
-  website in their first few months, so a recently started project
-  (`cordis.window_days`, default 45) with no project website listed is
-  a lead to write to its coordinator. The source reads CORDIS's own
-  free bulk CSV export (cordis.europa.eu/data, one GET, no key) rather
-  than its search page, which only renders through JavaScript.
+- **CORDIS Horizon Europe leads**: a Horizon Europe grant agreement
+  requires a dissemination plan, and most multi-partner projects
+  (RIA/IA/CSA) set up a project website in their first few months, so
+  a project with a start date near today and no project website
+  listed is a lead to write to its coordinator. The source reads
+  CORDIS's own free bulk CSV export (cordis.europa.eu/data, one GET,
+  no key) rather than its search page, which only renders through
+  JavaScript.
 
-  Checked 12 Oct 2026: CORDIS's "project website" field
-  (`webLink.csv`, type `relatedWebsite`) turned out to be an
-  editorially curated field, not a systematic one. Counted by project
-  start year across the whole HORIZON dataset, only 13% of 2021-start
-  projects have one recorded, dropping to 1-2% for 2022-2025 and under
-  0.2% for 2026-start projects, even though 2021-2023 projects are
-  3-5 years old now and overwhelmingly have real sites. A direct
-  spot-check of 3 "no website listed" 2022 consortium projects
-  (SolDAC, Photo2Fuel, SSH CENTRE) found all 3 already running real,
-  live project websites CORDIS had simply never recorded.
+  This shipped once backward-only (`cordis.window_days`, default 45,
+  no forward window) and got disabled the same day it was built, 12
+  Oct 2026: CORDIS's "project website" field (`webLink.csv`, type
+  `relatedWebsite`) turned out to be an editorially curated field, not
+  a systematic one, filled in for only 1-2% of ALL Horizon Europe
+  projects regardless of age (13% even for 2021-start projects, which
+  are years old and overwhelmingly have real sites: a spot-check of 3
+  found all 3 already running real sites CORDIS had never recorded).
+  A real run confirmed the practical effect: its newest eligible
+  cohort (11 days old) checked out clean on a live web search, but its
+  much larger older cohort (41 days old, several hundred projects)
+  didn't, a spot-check there found roughly half already running real
+  sites CORDIS hadn't recorded.
 
-  That alone could be forgiven if the signal held for the narrow slice
-  this adapter actually targets: a project within `window_days` of its
-  own start date, where "too new to have a site yet" is plausible on
-  its own. The one real run on 12 Oct 2026 tested that directly. The
-  newest eligible cohort (started 2026-10-01, 11 days old: DigiWaves,
-  FarmHeroes, PROCLAIM, EXCELY, RESSORT, the 5 pasted into the task
-  report) held up on a live web search: no dedicated site for any of
-  the 5. But the same run's much larger pool before the per-run cap,
-  the 2026-09-01 cohort (41 days old, several hundred eligible
-  projects, every one of them also lacking a recorded website), told a
-  different story: a 6-project spot-check (ARION, PostQat, OceanNexus,
-  WUNDERWORK, EOSC4ALL, SHIFT 5.0) found 3 of 6 already running real,
-  live dissemination sites (openaire.eu/arion-101287335, postqat.com,
-  oceannexus.eu) that CORDIS had not recorded: roughly a 50%
-  false-positive rate at the older end of the very window this source
-  uses by default. Narrowing the window would only shrink the pool
-  back to a handful a month (the scale opposite.md's own research
-  found), not fix the real problem: the field says almost nothing
-  about whether a project has a site, only whether CORDIS wrote about
-  it, so widening the window for useful volume just lets more
-  already-built sites back in as false positives. Full writeup in
-  `internal/sources/cordis`'s own doc comment; recheck the premise
-  there before setting `cordis_leads = true`.
+  A narrower backward window alone doesn't fix that; a forward one
+  does. `cordis.window_ahead_days` (default 60) extends the window
+  forward: a project counts as a lead if its start date is anywhere
+  from `window_days` days ago to `window_ahead_days` days from now. A
+  project that hasn't started yet cannot have built a site, full stop,
+  independent of anything CORDIS does or doesn't record, and nobody's
+  approached its coordinator yet either, so it's the strongest version
+  of this lead there is. Counting CORDIS's own 22 Sep export by start
+  month found hundreds of such projects every month (468 starting
+  2026-10, 165 in 2026-11, 72 in 2026-12), none of them with a website
+  recorded, for the obvious reason that they hadn't started. Taktek's
+  own config tightens `window_days` to 21 (keeping the backward,
+  already-might-have-built-one risk small, closer to the validated-
+  clean 11-day mark than the risky 41-day one) while leaving
+  `window_ahead_days` at 60 to do the volume. Candidates come back
+  soonest-start-date first (`cordis.max_per_run`, default 5, still
+  applies, and still at most one lead per coordinator per run), so the
+  most time-critical projects, about to start or that just did, win
+  the cap ahead of ones still months out. Re-enabled 12 Oct 2026; a
+  second real run correctly skipped the first run's 5 already-seen
+  leads and posted 5 different coordinators, still from the same
+  11-day-old cohort (nothing qualified between 21 and 11 days back),
+  since it's still the soonest-dated pool until it drains. Full
+  writeup, including both runs' spot-checks, in
+  `internal/sources/cordis`'s own doc comment.
 
 ### The ignore list
 

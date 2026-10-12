@@ -184,8 +184,11 @@ channel = "C0C8CUJVCT0"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.CORDIS.WindowDays != 45 {
-		t.Errorf("CORDIS.WindowDays = %d, want default 45", c.CORDIS.WindowDays)
+	if c.CORDIS.WindowDays != 21 {
+		t.Errorf("CORDIS.WindowDays = %d, want default 21", c.CORDIS.WindowDays)
+	}
+	if c.CORDIS.WindowAheadDays != 60 {
+		t.Errorf("CORDIS.WindowAheadDays = %d, want default 60", c.CORDIS.WindowAheadDays)
 	}
 	if len(c.CORDIS.SkipCountries) != 1 || c.CORDIS.SkipCountries[0] != "DE" {
 		t.Errorf("CORDIS.SkipCountries = %v, want default [\"DE\"]", c.CORDIS.SkipCountries)
@@ -202,6 +205,7 @@ func TestLoad_ReadsCORDISOverridesAndToggle(t *testing.T) {
 	path := writeTOML(t, `
 [cordis]
 window_days = 30
+window_ahead_days = 90
 skip_countries = ["DE", "AT"]
 programmes = ["HORIZON-CL5"]
 max_per_run = 3
@@ -215,6 +219,9 @@ cordis_leads = true
 	}
 	if c.CORDIS.WindowDays != 30 {
 		t.Errorf("CORDIS.WindowDays = %d, want 30", c.CORDIS.WindowDays)
+	}
+	if c.CORDIS.WindowAheadDays != 90 {
+		t.Errorf("CORDIS.WindowAheadDays = %d, want 90", c.CORDIS.WindowAheadDays)
 	}
 	if len(c.CORDIS.SkipCountries) != 2 {
 		t.Errorf("CORDIS.SkipCountries = %v, want 2 entries", c.CORDIS.SkipCountries)

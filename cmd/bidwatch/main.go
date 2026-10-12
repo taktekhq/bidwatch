@@ -139,10 +139,11 @@ func enabledSources(cfg *config.Config, firecrawlKey, publicwwwKey string) []sou
 	// off by default, because CORDIS's "project website" field doesn't
 	// support the signal this was built to read.
 	add(cfg.Sources.CORDISLeads, cordis.Name, cordis.New(cordis.Config{
-		WindowDays:    cfg.CORDIS.WindowDays,
-		SkipCountries: cfg.CORDIS.SkipCountries,
-		Programmes:    cfg.CORDIS.Programmes,
-		MaxPerRun:     cfg.CORDIS.MaxPerRun,
+		WindowDays:      cfg.CORDIS.WindowDays,
+		WindowAheadDays: cfg.CORDIS.WindowAheadDays,
+		SkipCountries:   cfg.CORDIS.SkipCountries,
+		Programmes:      cfg.CORDIS.Programmes,
+		MaxPerRun:       cfg.CORDIS.MaxPerRun,
 	}))
 
 	return out
